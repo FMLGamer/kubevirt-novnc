@@ -12,11 +12,50 @@
       const apiPrefix = 'k8s/apis';
       const namespace = 'virtual-azurion';
       const ACTION_REFRESH_MS = 1000;
+      const CONSOLE_EXTRA_BLOCK_MS = 10000;
 
       let actionRefreshTimerId = null;
       let pendingActionVmNames = new Set();
+      let vmRowStateMap = new Map();
+      let vmConsoleCooldownUntil = new Map();
+      let vmConsoleCooldownTimers = new Map();
       let loadInProgress = false;
       let loadQueued = false;
+      let refreshInProgress = false;
+      let refreshQueued = false;
+
+      function clearConsoleCooldownTimer(vmName) {
+        const timerId = vmConsoleCooldownTimers.get(vmName);
+        if (timerId !== undefined) {
+          window.clearTimeout(timerId);
+          vmConsoleCooldownTimers.delete(vmName);
+        }
+      }
+
+      function shouldDisableVncButton(vmName, phase, controlState) {
+        const cooldownUntil = vmConsoleCooldownUntil.get(vmName) || 0;
+        const cooldownActive = Date.now() < cooldownUntil;
+        return phase !== 'Running' || controlState.isBlocked || cooldownActive;
+      }
+
+      function scheduleConsoleCooldownRelease(vmName) {
+        clearConsoleCooldownTimer(vmName);
+        const cooldownUntil = vmConsoleCooldownUntil.get(vmName) || 0;
+        const waitMs = Math.max(0, cooldownUntil - Date.now());
+
+        const timerId = window.setTimeout(() => {
+          const rowState = vmRowStateMap.get(vmName);
+          if (rowState) {
+            rowState.vncButton.disabled = shouldDisableVncButton(vmName, rowState.currentState.phase, rowState.currentState.controlState);
+          }
+          if ((vmConsoleCooldownUntil.get(vmName) || 0) <= Date.now()) {
+            vmConsoleCooldownUntil.delete(vmName);
+          }
+          vmConsoleCooldownTimers.delete(vmName);
+        }, waitMs + 20);
+
+        vmConsoleCooldownTimers.set(vmName, timerId);
+      }
 
       function startActionRefreshLoop() {
         if (actionRefreshTimerId !== null) {
@@ -28,7 +67,7 @@
             stopActionRefreshLoop();
             return;
           }
-          loadVms();
+          refreshPendingVmStates();
         }, ACTION_REFRESH_MS);
       }
 
@@ -42,10 +81,15 @@
       function trackVmAction(vmName) {
         pendingActionVmNames.add(vmName);
         startActionRefreshLoop();
+        refreshPendingVmStates();
       }
 
       function clearRows() {
         document.getElementById('vmis').replaceChildren();
+        vmRowStateMap.clear();
+        vmConsoleCooldownUntil.clear();
+        vmConsoleCooldownTimers.forEach((timerId) => window.clearTimeout(timerId));
+        vmConsoleCooldownTimers.clear();
       }
 
       function addMessageRow(message) {
@@ -106,6 +150,18 @@
         return readyCondition.status === 'True' ? 'Ready' : 'Not Ready';
       }
 
+      function buildVmDisplayState(vmi, fetchError) {
+        const phase = fetchError ? 'Error' : (vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped');
+        const readyStatus = fetchError ? 'Error' : (vmi ? getReadyStatus(vmi) : 'Not Ready');
+        const controlState = getControlState(phase, readyStatus, fetchError);
+        return {
+          phase: phase,
+          readyStatus: readyStatus,
+          fetchError: fetchError,
+          controlState: controlState
+        };
+      }
+
       async function sendStartStop(vmName, action) {
         const vmPath = apiPrefix + '/subresources.kubevirt.io/v1alpha3/namespaces/' +
           namespace + '/virtualmachines/' + encodeURIComponent(vmName) + '/' + action;
@@ -119,7 +175,7 @@
           console.error('Error sending ' + action + ':', err);
         } finally {
           await new Promise((resolve) => setTimeout(resolve, 500));
-          loadVms();
+          refreshPendingVmStates();
         }
       }
 
@@ -183,12 +239,19 @@
         return btn;
       }
 
-      function createVncButton(vmiName, phase) {
+      function renderControlGroup(controlGroup, vmName, phase, readyStatus, fetchError) {
+        controlGroup.replaceChildren(
+          createControlButton(vmName, phase, readyStatus, fetchError),
+          createRestartButton(vmName, phase, readyStatus, fetchError)
+        );
+      }
+
+      function createVncButton(vmiName, disabled) {
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-17';
         btn.textContent = vmiName;
-        btn.disabled = phase !== 'Running';
+        btn.disabled = disabled;
 
         const vncPath = apiPrefix + '/subresources.kubevirt.io/v1alpha3/namespaces/' +
           namespace + '/virtualmachineinstances/' + encodeURIComponent(vmiName) + '/vnc';
@@ -205,18 +268,46 @@
         return btn;
       }
 
-      async function appendVmRow(vm, vmi, fetchError) {
-        const tr = document.createElement('tr');
-        const phase = fetchError ? 'Error' : (vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped');
-        const readyStatus = fetchError ? 'Error' : (vmi ? getReadyStatus(vmi) : 'Not Ready');
-        const controlState = getControlState(phase, readyStatus, fetchError);
-
-        if (pendingActionVmNames.has(vm.metadata.name) && !controlState.isBlocked) {
-          pendingActionVmNames.delete(vm.metadata.name);
+      function updateVmRowState(vmName, vmi, fetchError) {
+        const rowState = vmRowStateMap.get(vmName);
+        if (!rowState) {
+          return;
         }
 
+        const nextState = buildVmDisplayState(vmi, fetchError);
+        const prevState = rowState.currentState;
+
+        if (pendingActionVmNames.has(vmName) && !nextState.controlState.isBlocked) {
+          pendingActionVmNames.delete(vmName);
+          vmConsoleCooldownUntil.set(vmName, Date.now() + CONSOLE_EXTRA_BLOCK_MS);
+          scheduleConsoleCooldownRelease(vmName);
+        }
+
+        const changed =
+          !prevState ||
+          prevState.phase !== nextState.phase ||
+          prevState.readyStatus !== nextState.readyStatus ||
+          prevState.fetchError !== nextState.fetchError;
+
+        if (changed) {
+          rowState.phasePill.className = 'status-pill status-' + nextState.phase.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          rowState.phasePill.textContent = nextState.phase;
+          rowState.readyTd.textContent = nextState.readyStatus;
+          rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
+          renderControlGroup(rowState.controlGroup, vmName, nextState.phase, nextState.readyStatus, nextState.fetchError);
+          rowState.currentState = nextState;
+        } else {
+          rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
+        }
+      }
+
+      async function appendVmRow(vm, vmi, fetchError) {
+        const tr = document.createElement('tr');
+        const state = buildVmDisplayState(vmi, fetchError);
+
         const vmTd = document.createElement('td');
-        vmTd.appendChild(createVncButton(vm.metadata.name, phase));
+        const vncButton = createVncButton(vm.metadata.name, shouldDisableVncButton(vm.metadata.name, state.phase, state.controlState));
+        vmTd.appendChild(vncButton);
         tr.appendChild(vmTd);
 
         const ageTd = document.createElement('td');
@@ -225,24 +316,36 @@
 
         const phaseTd = document.createElement('td');
         const phasePill = document.createElement('span');
-        phasePill.className = 'status-pill status-' + phase.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        phasePill.textContent = phase;
+        phasePill.className = 'status-pill status-' + state.phase.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        phasePill.textContent = state.phase;
         phaseTd.appendChild(phasePill);
         tr.appendChild(phaseTd);
 
         const readyTd = document.createElement('td');
-        readyTd.textContent = readyStatus;
+        readyTd.textContent = state.readyStatus;
         tr.appendChild(readyTd);
 
         const controlTd = document.createElement('td');
         const controlGroup = document.createElement('div');
         controlGroup.className = 'control-group';
-        controlGroup.appendChild(createControlButton(vm.metadata.name, phase, readyStatus, fetchError));
-        controlGroup.appendChild(createRestartButton(vm.metadata.name, phase, readyStatus, fetchError));
+        renderControlGroup(controlGroup, vm.metadata.name, state.phase, state.readyStatus, state.fetchError);
         controlTd.appendChild(controlGroup);
         tr.appendChild(controlTd);
 
         document.getElementById('vmis').appendChild(tr);
+        vmRowStateMap.set(vm.metadata.name, {
+          phasePill: phasePill,
+          readyTd: readyTd,
+          vncButton: vncButton,
+          controlGroup: controlGroup,
+          currentState: state
+        });
+
+        if (pendingActionVmNames.has(vm.metadata.name) && !state.controlState.isBlocked) {
+          pendingActionVmNames.delete(vm.metadata.name);
+          vmConsoleCooldownUntil.set(vm.metadata.name, Date.now() + CONSOLE_EXTRA_BLOCK_MS);
+          scheduleConsoleCooldownRelease(vm.metadata.name);
+        }
       }
 
       function canListVms(rule) {
@@ -346,6 +449,42 @@
         }
       }
 
+      async function refreshPendingVmStates() {
+        if (refreshInProgress) {
+          refreshQueued = true;
+          return;
+        }
+
+        if (pendingActionVmNames.size === 0) {
+          stopActionRefreshLoop();
+          return;
+        }
+
+        refreshInProgress = true;
+        try {
+          const vmNames = Array.from(pendingActionVmNames);
+          const results = await Promise.all(
+            vmNames.map(async (vmName) => {
+              const vmiResult = await getVmiForVm(vmName);
+              return { vmName: vmName, vmiResult: vmiResult };
+            })
+          );
+
+          results.forEach((entry) => {
+            updateVmRowState(entry.vmName, entry.vmiResult.vmi, entry.vmiResult.fetchError);
+          });
+        } finally {
+          refreshInProgress = false;
+          if (pendingActionVmNames.size === 0) {
+            stopActionRefreshLoop();
+          }
+          if (refreshQueued) {
+            refreshQueued = false;
+            refreshPendingVmStates();
+          }
+        }
+      }
+
       async function loadVms() {
         if (loadInProgress) {
           loadQueued = true;
@@ -391,6 +530,19 @@
             const vmiResult = await getVmiForVm(vm.metadata.name);
             await appendVmRow(vm, vmiResult.vmi, vmiResult.fetchError);
           }
+
+          const listedVmNames = new Set(vms.map((vm) => vm.metadata?.name).filter(Boolean));
+          pendingActionVmNames.forEach((name) => {
+            if (!listedVmNames.has(name)) {
+              pendingActionVmNames.delete(name);
+            }
+          });
+          Array.from(vmConsoleCooldownUntil.keys()).forEach((name) => {
+            if (!listedVmNames.has(name)) {
+              vmConsoleCooldownUntil.delete(name);
+              clearConsoleCooldownTimer(name);
+            }
+          });
         } finally {
           loadInProgress = false;
           if (pendingActionVmNames.size === 0) {
