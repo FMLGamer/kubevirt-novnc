@@ -194,10 +194,9 @@ th[colspan] {
 .button-control {
     align-items: center;
     appearance: none;
-    background: linear-gradient(180deg, #ff6b35 0%, #e55a2b 100%);
-    border: 1px solid #d45220;
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.2);
+    border: 1px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
     color: #ffffff;
     cursor: pointer;
     display: inline-flex;
@@ -214,15 +213,48 @@ th[colspan] {
     -webkit-user-select: none;
 }
 
-.button-control:hover {
+.button-control-start {
+    background: linear-gradient(180deg, #33b864 0%, #23914a 100%);
+    border-color: #1c7f40;
+}
+
+.button-control-stop {
+    background: linear-gradient(180deg, #e54c4c 0%, #bf2f2f 100%);
+    border-color: #a92727;
+}
+
+.button-control:not(:disabled):hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.3);
-    background: linear-gradient(180deg, #ff7a4a, #e8643a);
+}
+
+.button-control-start:not(:disabled):hover {
+    box-shadow: 0 6px 16px rgba(35, 145, 74, 0.35);
+    background: linear-gradient(180deg, #41c773, #2da355);
+}
+
+.button-control-stop:not(:disabled):hover {
+    box-shadow: 0 6px 16px rgba(191, 47, 47, 0.35);
+    background: linear-gradient(180deg, #ef5b5b, #cb3737);
 }
 
 .button-control:focus-visible {
-    outline: 2px solid #ff6b35;
+    outline: 2px solid #335fb8;
     outline-offset: 2px;
+}
+
+.button-control:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+    color: #f4f7ff;
+    border-color: #7e8fb9;
+    background: repeating-linear-gradient(
+        135deg,
+        #99a9cf 0,
+        #99a9cf 8px,
+        #8b9dc7 8px,
+        #8b9dc7 16px
+    );
+    box-shadow: none;
 }
 
 @media (max-width: 760px) {
