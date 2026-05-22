@@ -91,18 +91,17 @@
         }
       }
 
-      function createControlButton(vmiName, phase, vmi) {
+      function createControlButton(vmiName, phase, fetchError) {
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-control';
         
         const isRunning = phase === 'Running';
-        const isTransitional = ['Pending', 'Scheduling', 'Scheduled', 'Succeeded', 'Unknown'].includes(phase);
-        const hasInfo = vmi !== null;
+        const isTransitional = ['Pending', 'Scheduling', 'Scheduled', 'Succeeded', 'Unknown', 'Error'].includes(phase);
         
         btn.textContent = isRunning ? 'Stop' : 'Start';
         btn.setAttribute('data-action', isRunning ? 'stop' : 'start');
-        btn.disabled = isTransitional || !hasInfo;
+        btn.disabled = isTransitional || fetchError;
         
         btn.addEventListener('click', () => {
           btn.disabled = true;
@@ -135,9 +134,9 @@
         return btn;
       }
 
-      async function appendVmRow(vm, vmi) {
+      async function appendVmRow(vm, vmi, fetchError) {
         const tr = document.createElement('tr');
-        const phase = vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped';
+        const phase = fetchError ? 'Error' : (vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped');
 
         const vmTd = document.createElement('td');
         vmTd.appendChild(createVncButton(vm.metadata.name, phase));
@@ -155,11 +154,11 @@
         tr.appendChild(phaseTd);
 
         const readyTd = document.createElement('td');
-        readyTd.textContent = vmi ? getReadyStatus(vmi) : 'Not Ready';
+        readyTd.textContent = fetchError ? 'Error' : (vmi ? getReadyStatus(vmi) : 'Not Ready');
         tr.appendChild(readyTd);
 
         const controlTd = document.createElement('td');
-        controlTd.appendChild(createControlButton(vm.metadata.name, phase, vmi));
+        controlTd.appendChild(createControlButton(vm.metadata.name, phase, fetchError));
         tr.appendChild(controlTd);
 
         document.getElementById('vmis').appendChild(tr);
@@ -248,28 +247,22 @@
         return items.find((item) => item.metadata?.name === name) || null;
       }
 
-      async function listAllVmis() {
-        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances';
+      async function getVmiForVm(vmName) {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
+          '/virtualmachineinstances/' + encodeURIComponent(vmName);
+
         try {
           const resp = await fetch(url);
+          if (resp.status === 404) {
+            return { vmi: null, fetchError: false };
+          }
           if (!resp.ok) {
-            return [];
+            return { vmi: null, fetchError: true };
           }
-          const data = await resp.json();
-          return Array.isArray(data.items) ? data.items : [];
+          return { vmi: await resp.json(), fetchError: false };
         } catch (err) {
-          return [];
+          return { vmi: null, fetchError: true };
         }
-      }
-
-      function buildVmiMap(vmis) {
-        const map = new Map();
-        vmis.forEach((vmi) => {
-          if (vmi.metadata?.name) {
-            map.set(vmi.metadata.name, vmi);
-          }
-        });
-        return map;
       }
 
       async function loadVms() {
@@ -307,12 +300,9 @@
 
         vms.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
         
-        const vmis = await listAllVmis();
-        const vmiMap = buildVmiMap(vmis);
-        
         for (const vm of vms) {
-          const vmi = vmiMap.get(vm.metadata.name) || null;
-          await appendVmRow(vm, vmi);
+          const vmiResult = await getVmiForVm(vm.metadata.name);
+          await appendVmRow(vm, vmiResult.vmi, vmiResult.fetchError);
         }
       }
 
