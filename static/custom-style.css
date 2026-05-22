@@ -273,6 +273,18 @@ th[colspan] {
     align-items: center;
 }
 
+.controls-header {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+    padding-right: 10px;
+}
+
+.vm-name-cell {
+    font-weight: 700;
+    color: var(--ink-900);
+}
+
 .console-cell {
     padding-left: 10px;
 }
@@ -280,6 +292,41 @@ th[colspan] {
 .controls-cell {
     padding-right: 10px;
     text-align: right;
+    white-space: nowrap;
+}
+
+.info-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid #ffd89a;
+    background: rgba(255, 246, 226, 0.95);
+    color: #7a4a00;
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.warn-triangle {
+    position: relative;
+    width: 14px;
+    height: 12px;
+    background: #f59b00;
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    flex: 0 0 auto;
+}
+
+.warn-triangle > span {
+    position: absolute;
+    top: 56%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
 }
 
 @media (max-width: 760px) {
