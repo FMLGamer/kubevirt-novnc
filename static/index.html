@@ -52,6 +52,60 @@
         }
       }
 
+      function calculateAge(creationTimestamp) {
+        if (!creationTimestamp) return 'Unknown';
+        const created = new Date(creationTimestamp);
+        const now = new Date();
+        const diffMs = now - created;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffMins < 1) return 'now';
+        if (diffMins < 60) return diffMins + 'm';
+        if (diffHours < 24) return diffHours + 'h';
+        return diffDays + 'd';
+      }
+
+      function getReadyStatus(vmi) {
+        if (!vmi.status?.conditions) return 'Unknown';
+        const readyCondition = vmi.status.conditions.find((c) => c.type === 'Ready');
+        if (!readyCondition) return 'Unknown';
+        return readyCondition.status === 'True' ? 'Ready' : 'Not Ready';
+      }
+
+      async function sendStartStop(vmName, action) {
+        const vmPath = apiPrefix + '/subresources.kubevirt.io/v1alpha3/namespaces/' +
+          namespace + '/virtualmachines/' + encodeURIComponent(vmName) + '/' + action;
+
+        try {
+          const resp = await fetch('/' + vmPath, { method: 'PUT' });
+          if (!resp.ok) {
+            console.error('Failed to ' + action + ' VM: ' + resp.status);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            loadVms();
+          }
+        } catch (err) {
+          console.error('Error sending ' + action + ':', err);
+        }
+      }
+
+      function createControlButton(vmiName, phase) {
+        const btn = document.createElement('button');
+        btn.setAttribute('role', 'button');
+        btn.className = 'button-control';
+        btn.textContent = phase === 'Running' ? 'Stop' : 'Start';
+        btn.setAttribute('data-action', phase === 'Running' ? 'stop' : 'start');
+
+        btn.addEventListener('click', () => {
+          const action = btn.getAttribute('data-action');
+          sendStartStop(vmiName, action);
+        });
+
+        return btn;
+      }
+
       function createVncButton(vmiName, phase) {
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
@@ -74,19 +128,17 @@
         return btn;
       }
 
-      function appendVmiRow(vmi) {
+      async function appendVmRow(vm, vmi) {
         const tr = document.createElement('tr');
-        const phase = String(vmi.status?.phase || 'Unknown');
-        const nodeName = String(vmi.status?.nodeName || '');
-        const ipAddress = String(vmi.status?.interfaces?.[0]?.ipAddress || '');
+        const phase = vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped';
 
         const vmTd = document.createElement('td');
-        vmTd.appendChild(createVncButton(vmi.metadata.name, phase));
+        vmTd.appendChild(createVncButton(vm.metadata.name, phase));
         tr.appendChild(vmTd);
 
-        const nodeTd = document.createElement('td');
-        nodeTd.textContent = nodeName;
-        tr.appendChild(nodeTd);
+        const ageTd = document.createElement('td');
+        ageTd.textContent = calculateAge(vm.metadata.creationTimestamp);
+        tr.appendChild(ageTd);
 
         const phaseTd = document.createElement('td');
         const phasePill = document.createElement('span');
@@ -95,20 +147,24 @@
         phaseTd.appendChild(phasePill);
         tr.appendChild(phaseTd);
 
-        const ipTd = document.createElement('td');
-        ipTd.textContent = ipAddress;
-        tr.appendChild(ipTd);
+        const readyTd = document.createElement('td');
+        readyTd.textContent = vmi ? getReadyStatus(vmi) : 'Not Ready';
+        tr.appendChild(readyTd);
+
+        const controlTd = document.createElement('td');
+        controlTd.appendChild(createControlButton(vm.metadata.name, phase));
+        tr.appendChild(controlTd);
 
         document.getElementById('vmis').appendChild(tr);
       }
 
-      function canListVmis(rule) {
+      function canListVms(rule) {
         const groups = Array.isArray(rule.apiGroups) ? rule.apiGroups : [];
         const resources = Array.isArray(rule.resources) ? rule.resources : [];
         const verbs = Array.isArray(rule.verbs) ? rule.verbs : [];
 
         const groupMatch = groups.includes('*') || groups.includes('kubevirt.io');
-        const resourceMatch = resources.includes('*') || resources.includes('virtualmachineinstances');
+        const resourceMatch = resources.includes('*') || resources.includes('virtualmachines');
         const verbMatch = verbs.includes('*') || verbs.includes('list');
 
         return groupMatch && resourceMatch && verbMatch;
@@ -134,7 +190,7 @@
 
         const review = await resp.json();
         const rules = Array.isArray(review.status?.resourceRules) ? review.status.resourceRules : [];
-        const matchedRules = rules.filter(canListVmis);
+        const matchedRules = rules.filter(canListVms);
 
         const names = new Set();
         let allNamesAllowed = false;
@@ -159,21 +215,21 @@
         };
       }
 
-      async function listAllVmis() {
-        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances';
+      async function listAllVms() {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1/namespaces/' + namespace + '/virtualmachines';
         const resp = await fetch(url);
         if (!resp.ok) {
-          throw new Error('Failed to list VMIs: ' + resp.status);
+          throw new Error('Failed to list VMs: ' + resp.status);
         }
 
         const data = await resp.json();
         return Array.isArray(data.items) ? data.items : [];
       }
 
-      async function listVmiByName(name) {
+      async function listVmByName(name) {
         const selector = encodeURIComponent('metadata.name=' + name);
-        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
-          '/virtualmachineinstances?fieldSelector=' + selector;
+        const url = '/' + apiPrefix + '/kubevirt.io/v1/namespaces/' + namespace +
+          '/virtualmachines?fieldSelector=' + selector;
 
         const resp = await fetch(url);
         if (!resp.ok) {
@@ -185,7 +241,22 @@
         return items.find((item) => item.metadata?.name === name) || null;
       }
 
-      async function loadVmis() {
+      async function getVmiForVm(vmName) {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
+          '/virtualmachineinstances/' + encodeURIComponent(vmName);
+
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) {
+            return null;
+          }
+          return await resp.json();
+        } catch (err) {
+          return null;
+        }
+      }
+
+      async function loadVms() {
         clearRows();
         const username = await getCurrentUsername();
 
@@ -198,38 +269,42 @@
           return;
         }
 
-        let vmis = [];
+        let vms = [];
 
         if (discovered.allNamesAllowed) {
           try {
-            vmis = await listAllVmis();
+            vms = await listAllVms();
           } catch (err) {
             console.error(err);
             addMessageRow('Error: unable to load virtual azurions');
             return;
           }
         } else if (discovered.names.length > 0) {
-          const perNameResults = await Promise.all(discovered.names.map((name) => listVmiByName(name)));
-          vmis = perNameResults.filter((item) => item !== null);
+          const perNameResults = await Promise.all(discovered.names.map((name) => listVmByName(name)));
+          vms = perNameResults.filter((item) => item !== null);
         }
 
-        if (vmis.length === 0) {
+        if (vms.length === 0) {
           addMessageRow('No virtual azurions found for user ' + username);
           return;
         }
 
-        vmis.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
-        vmis.forEach(appendVmiRow);
+        vms.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
+        
+        for (const vm of vms) {
+          const vmi = await getVmiForVm(vm.metadata.name);
+          await appendVmRow(vm, vmi);
+        }
       }
 
-      loadVmis();
+      loadVms();
     </script>
   </meta>
   <body>
     <main class="page-shell">
       <header class="top-bar">
         <div class="title-wrap">
-          <h1>KubeVirt Virtual Azurion</h1>
+          <h1>Virtual Azurion</h1>
         </div>
         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Philips_logo.svg/960px-Philips_logo.svg.png" alt="Philips logo" class="philips-logo" />
       </header>
@@ -237,7 +312,7 @@
       <section class="table-card" aria-label="Virtual machine console listing">
         <table>
           <thead>
-            <tr><th>VM Console</th><th>Node Name</th><th>Status</th><th>K8S IP Address</th></tr>
+            <tr><th>VM Console</th><th>Age</th><th>Status</th><th>Ready</th><th>Controls</th></tr>
           </thead>
           <tbody id="vmis"></tbody>
         </table>

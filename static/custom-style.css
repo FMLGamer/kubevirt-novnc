@@ -191,6 +191,40 @@ th[colspan] {
     box-shadow: none;
 }
 
+.button-control {
+    align-items: center;
+    appearance: none;
+    background: linear-gradient(180deg, #ff6b35 0%, #e55a2b 100%);
+    border: 1px solid #d45220;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.2);
+    color: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    justify-content: center;
+    line-height: normal;
+    max-width: 100%;
+    padding: 8px 12px;
+    text-align: center;
+    transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.button-control:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(255, 107, 53, 0.3);
+    background: linear-gradient(180deg, #ff7a4a, #e8643a);
+}
+
+.button-control:focus-visible {
+    outline: 2px solid #ff6b35;
+    outline-offset: 2px;
+}
+
 @media (max-width: 760px) {
     .top-bar {
         padding: 14px;
