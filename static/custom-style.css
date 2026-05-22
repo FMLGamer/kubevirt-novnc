@@ -154,18 +154,18 @@ th[colspan] {
     appearance: none;
     background: linear-gradient(180deg, #ffffff 0%, #e9f0ff 100%);
     border: 1px solid #c4d3ff;
-    border-radius: 12px;
+    border-radius: 10px;
     box-shadow: 0 2px 8px rgba(20, 53, 132, 0.15);
     color: var(--ink-900);
     cursor: pointer;
     display: inline-flex;
     font-family: inherit;
-    font-size: 0.93rem;
+    font-size: 0.9rem;
     font-weight: 700;
     justify-content: center;
     line-height: normal;
     max-width: 100%;
-    padding: 9px 14px;
+    padding: 9px 13px;
     text-align: center;
     transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
     user-select: none;
@@ -194,19 +194,19 @@ th[colspan] {
 .button-control {
     align-items: center;
     appearance: none;
-    border-radius: 8px;
+    border-radius: 10px;
     border: 1px solid transparent;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
     color: #ffffff;
     cursor: pointer;
     display: inline-flex;
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     font-weight: 700;
     justify-content: center;
     line-height: normal;
     max-width: 100%;
-    padding: 8px 12px;
+    padding: 9px 13px;
     text-align: center;
     transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
     user-select: none;
@@ -271,6 +271,15 @@ th[colspan] {
     display: inline-flex;
     gap: 8px;
     align-items: center;
+}
+
+.console-cell {
+    padding-left: 10px;
+}
+
+.controls-cell {
+    padding-right: 10px;
+    text-align: right;
 }
 
 @media (max-width: 760px) {

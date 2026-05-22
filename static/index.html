@@ -12,7 +12,7 @@
       const apiPrefix = 'k8s/apis';
       const namespace = 'virtual-azurion';
       const ACTION_REFRESH_MS = 1000;
-      const CONSOLE_EXTRA_BLOCK_MS = 10000;
+      const CONSOLE_EXTRA_BLOCK_MS = 30000;
 
       let actionRefreshTimerId = null;
       let pendingActionVmNames = new Set();
@@ -264,7 +264,7 @@
 
         const vncPath = apiPrefix + '/subresources.kubevirt.io/v1alpha3/namespaces/' +
           namespace + '/virtualmachineinstances/' + encodeURIComponent(vmiName) + '/vnc';
-        const vncUrl = 'vnc.html?path=' + encodeURIComponent(vncPath);
+        const vncUrl = 'vnc.html?path=' + encodeURIComponent(vncPath) + '&autoconnect=1';
 
         btn.addEventListener('click', () => {
           window.open(
@@ -326,6 +326,7 @@
         const state = buildVmDisplayState(vmi, fetchError);
 
         const vmTd = document.createElement('td');
+        vmTd.className = 'console-cell';
         const vncButton = createVncButton(vm.metadata.name, shouldDisableVncButton(vm.metadata.name, state.phase, state.controlState));
         vmTd.appendChild(vncButton);
         tr.appendChild(vmTd);
@@ -346,6 +347,7 @@
         tr.appendChild(readyTd);
 
         const controlTd = document.createElement('td');
+        controlTd.className = 'controls-cell';
         const controlGroup = document.createElement('div');
         controlGroup.className = 'control-group';
         renderControlGroup(controlGroup, vm.metadata.name, state.phase, state.readyStatus, state.fetchError);
