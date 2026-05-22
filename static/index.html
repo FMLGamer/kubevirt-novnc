@@ -91,18 +91,17 @@
         }
       }
 
-      function createControlButton(vmiName, phase, fetchError) {
+      function createControlButton(vmiName, phase, readyStatus, fetchError) {
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-control';
         
-        const isRunning = phase === 'Running';
-        const isTransitional = ['Pending', 'Scheduling', 'Scheduled', 'Succeeded', 'Unknown', 'Error'].includes(phase);
-        
-        const action = isRunning ? 'stop' : 'start';
-        const isBlocked = isTransitional || fetchError;
+        const action = phase === 'Running' ? 'stop' : 'start';
+        const canStart = !fetchError && (phase === 'Stopped' || phase === 'Failed') && readyStatus === 'Not Ready';
+        const canStop = !fetchError && phase === 'Running' && readyStatus === 'Ready';
+        const isBlocked = !(canStart || canStop);
 
-        btn.textContent = isBlocked ? (isRunning ? 'Stop (Blocked)' : 'Start (Blocked)') : (isRunning ? 'Stop' : 'Start');
+        btn.textContent = isBlocked ? (action === 'stop' ? 'Stop (Blocked)' : 'Start (Blocked)') : (action === 'stop' ? 'Stop' : 'Start');
         btn.setAttribute('data-action', action);
         btn.classList.add(action === 'start' ? 'button-control-start' : 'button-control-stop');
         btn.disabled = isBlocked;
@@ -144,6 +143,7 @@
       async function appendVmRow(vm, vmi, fetchError) {
         const tr = document.createElement('tr');
         const phase = fetchError ? 'Error' : (vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped');
+        const readyStatus = fetchError ? 'Error' : (vmi ? getReadyStatus(vmi) : 'Not Ready');
 
         const vmTd = document.createElement('td');
         vmTd.appendChild(createVncButton(vm.metadata.name, phase));
@@ -161,11 +161,11 @@
         tr.appendChild(phaseTd);
 
         const readyTd = document.createElement('td');
-        readyTd.textContent = fetchError ? 'Error' : (vmi ? getReadyStatus(vmi) : 'Not Ready');
+        readyTd.textContent = readyStatus;
         tr.appendChild(readyTd);
 
         const controlTd = document.createElement('td');
-        controlTd.appendChild(createControlButton(vm.metadata.name, phase, fetchError));
+        controlTd.appendChild(createControlButton(vm.metadata.name, phase, readyStatus, fetchError));
         tr.appendChild(controlTd);
 
         document.getElementById('vmis').appendChild(tr);
