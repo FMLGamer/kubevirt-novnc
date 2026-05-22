@@ -196,7 +196,7 @@
         btn.className = 'button-control button-control-restart';
 
         const controlState = getControlState(phase, readyStatus, fetchError);
-        const isBlocked = controlState.isBlocked || controlState.action === 'stop';
+        const isBlocked = controlState.isBlocked || controlState.action === 'start';
 
         btn.textContent = isBlocked ? 'Restart (Blocked)' : 'Restart';
         btn.disabled = isBlocked;
