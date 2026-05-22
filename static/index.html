@@ -254,32 +254,22 @@
         return items.find((item) => item.metadata?.name === name) || null;
       }
 
-      async function listAllVmis() {
-        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances';
+      async function getVmiForVm(vmName) {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
+          '/virtualmachineinstances/' + encodeURIComponent(vmName);
 
         try {
           const resp = await fetch(url);
+          if (resp.status === 404) {
+            return { vmi: null, fetchError: false };
+          }
           if (!resp.ok) {
-            return { items: [], fetchError: true };
+            return { vmi: null, fetchError: true };
           }
-          const data = await resp.json();
-          return {
-            items: Array.isArray(data.items) ? data.items : [],
-            fetchError: false
-          };
+          return { vmi: await resp.json(), fetchError: false };
         } catch (err) {
-          return { items: [], fetchError: true };
+          return { vmi: null, fetchError: true };
         }
-      }
-
-      function buildVmiMap(vmis) {
-        const map = new Map();
-        vmis.forEach((vmi) => {
-          if (vmi.metadata?.name) {
-            map.set(vmi.metadata.name, vmi);
-          }
-        });
-        return map;
       }
 
       async function loadVms() {
@@ -316,12 +306,9 @@
         }
 
         vms.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
-        const vmiListResult = await listAllVmis();
-        const vmiMap = buildVmiMap(vmiListResult.items);
-        
         for (const vm of vms) {
-          const vmi = vmiMap.get(vm.metadata.name) || null;
-          await appendVmRow(vm, vmi, vmiListResult.fetchError);
+          const vmiResult = await getVmiForVm(vm.metadata.name);
+          await appendVmRow(vm, vmiResult.vmi, vmiResult.fetchError);
         }
       }
 
