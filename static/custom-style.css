@@ -274,10 +274,10 @@ th[colspan] {
 }
 
 .controls-header {
-    width: 1%;
     white-space: nowrap;
-    text-align: right;
-    padding-right: 10px;
+    text-align: left;
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 .vm-name-cell {
@@ -286,12 +286,14 @@ th[colspan] {
 }
 
 .console-cell {
-    padding-left: 10px;
+    padding-left: 16px;
+    text-align: left;
 }
 
 .controls-cell {
-    padding-right: 10px;
-    text-align: right;
+    padding-left: 16px;
+    padding-right: 16px;
+    text-align: left;
     white-space: nowrap;
 }
 

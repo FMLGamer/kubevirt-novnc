@@ -293,16 +293,6 @@
         nameTd.textContent = vm.metadata?.name || 'Unknown';
         tr.appendChild(nameTd);
 
-        const vmTd = document.createElement('td');
-        vmTd.className = 'console-cell';
-        const vncButton = createVncButton(vm.metadata.name, shouldDisableVncButton(vm.metadata.name, state.phase, state.controlState));
-        vmTd.appendChild(vncButton);
-        tr.appendChild(vmTd);
-
-        const ageTd = document.createElement('td');
-        ageTd.textContent = calculateAge(vm.metadata.creationTimestamp);
-        tr.appendChild(ageTd);
-
         const phaseTd = document.createElement('td');
         const phasePill = document.createElement('span');
         phasePill.className = 'status-pill status-' + state.phase.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -313,6 +303,16 @@
         const readyTd = document.createElement('td');
         readyTd.textContent = state.readyStatus;
         tr.appendChild(readyTd);
+
+        const ageTd = document.createElement('td');
+        ageTd.textContent = calculateAge(vm.metadata.creationTimestamp);
+        tr.appendChild(ageTd);
+
+        const vmTd = document.createElement('td');
+        vmTd.className = 'console-cell';
+        const vncButton = createVncButton(vm.metadata.name, shouldDisableVncButton(vm.metadata.name, state.phase, state.controlState));
+        vmTd.appendChild(vncButton);
+        tr.appendChild(vmTd);
 
         const controlTd = document.createElement('td');
         controlTd.className = 'controls-cell';
@@ -555,7 +555,7 @@
       <section class="table-card" aria-label="Virtual machine console listing">
         <table>
           <thead>
-            <tr><th>VM Name</th><th>VM Console</th><th>Age</th><th>Status</th><th>Ready</th><th class="controls-header">Controls</th></tr>
+            <tr><th>VM Name</th><th>Status</th><th>Ready</th><th>Age</th><th>VM Console</th><th class="controls-header">Controls</th></tr>
           </thead>
           <tbody id="vmis"></tbody>
         </table>
