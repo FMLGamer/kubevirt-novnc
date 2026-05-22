@@ -16,6 +16,7 @@
 
       let actionRefreshTimerId = null;
       let pendingActionVmNames = new Set();
+      let pendingActionMeta = new Map();
       let vmRowStateMap = new Map();
       let vmConsoleCooldownUntil = new Map();
       let vmConsoleCooldownTimers = new Map();
@@ -23,6 +24,10 @@
       let loadQueued = false;
       let refreshInProgress = false;
       let refreshQueued = false;
+
+      function stateSignature(state) {
+        return String(state.phase) + '|' + String(state.readyStatus) + '|' + String(state.fetchError);
+      }
 
       function clearConsoleCooldownTimer(vmName) {
         const timerId = vmConsoleCooldownTimers.get(vmName);
@@ -79,7 +84,10 @@
       }
 
       function trackVmAction(vmName) {
+        const rowState = vmRowStateMap.get(vmName);
+        const baselineSignature = rowState ? stateSignature(rowState.currentState) : null;
         pendingActionVmNames.add(vmName);
+        pendingActionMeta.set(vmName, { baselineSignature: baselineSignature, sawChange: false });
         startActionRefreshLoop();
         refreshPendingVmStates();
       }
@@ -87,6 +95,7 @@
       function clearRows() {
         document.getElementById('vmis').replaceChildren();
         vmRowStateMap.clear();
+        pendingActionMeta.clear();
         vmConsoleCooldownUntil.clear();
         vmConsoleCooldownTimers.forEach((timerId) => window.clearTimeout(timerId));
         vmConsoleCooldownTimers.clear();
@@ -276,9 +285,19 @@
 
         const nextState = buildVmDisplayState(vmi, fetchError);
         const prevState = rowState.currentState;
+        const pendingMeta = pendingActionMeta.get(vmName);
 
-        if (pendingActionVmNames.has(vmName) && !nextState.controlState.isBlocked) {
+        if (pendingMeta) {
+          const nextSignature = stateSignature(nextState);
+          if (pendingMeta.baselineSignature === null || nextSignature !== pendingMeta.baselineSignature) {
+            pendingMeta.sawChange = true;
+            pendingActionMeta.set(vmName, pendingMeta);
+          }
+        }
+
+        if (pendingActionVmNames.has(vmName) && !nextState.controlState.isBlocked && (!pendingMeta || pendingMeta.sawChange)) {
           pendingActionVmNames.delete(vmName);
+          pendingActionMeta.delete(vmName);
           vmConsoleCooldownUntil.set(vmName, Date.now() + CONSOLE_EXTRA_BLOCK_MS);
           scheduleConsoleCooldownRelease(vmName);
         }
@@ -294,11 +313,12 @@
           rowState.phasePill.textContent = nextState.phase;
           rowState.readyTd.textContent = nextState.readyStatus;
           rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
-          renderControlGroup(rowState.controlGroup, vmName, nextState.phase, nextState.readyStatus, nextState.fetchError);
           rowState.currentState = nextState;
-        } else {
-          rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
         }
+
+        rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
+        renderControlGroup(rowState.controlGroup, vmName, nextState.phase, nextState.readyStatus, nextState.fetchError);
+        rowState.currentState = nextState;
       }
 
       async function appendVmRow(vm, vmi, fetchError) {
@@ -341,8 +361,10 @@
           currentState: state
         });
 
-        if (pendingActionVmNames.has(vm.metadata.name) && !state.controlState.isBlocked) {
+        const pendingMeta = pendingActionMeta.get(vm.metadata.name);
+        if (pendingActionVmNames.has(vm.metadata.name) && !state.controlState.isBlocked && (!pendingMeta || pendingMeta.sawChange)) {
           pendingActionVmNames.delete(vm.metadata.name);
+          pendingActionMeta.delete(vm.metadata.name);
           vmConsoleCooldownUntil.set(vm.metadata.name, Date.now() + CONSOLE_EXTRA_BLOCK_MS);
           scheduleConsoleCooldownRelease(vm.metadata.name);
         }
@@ -535,6 +557,7 @@
           pendingActionVmNames.forEach((name) => {
             if (!listedVmNames.has(name)) {
               pendingActionVmNames.delete(name);
+              pendingActionMeta.delete(name);
             }
           });
           Array.from(vmConsoleCooldownUntil.keys()).forEach((name) => {
