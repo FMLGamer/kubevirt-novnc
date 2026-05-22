@@ -1,65 +1,87 @@
 # kubevirt-novnc
 
-> [!NOTE]
-> This repository was forked on 2024-01-05 directly from [wavezhang/virtVNC](https://github.com/wavezhang/virtVNC) as of commit [0fe6d5a](https://github.com/wavezhang/virtVNC/commit/0fe6d5a1ffdf9aed88dbd507f7b43a4cac5d343d).
+Web UI for viewing KubeVirt virtual machines, opening noVNC consoles, and sending start/stop/restart actions through the Kubernetes API proxy.
 
-Since 2024-01-05, the following enhancements have been made to the original fork:
+## What This Project Provides
 
-  - Bumped [`bitnami/kubectl`](https://hub.docker.com/r/bitnami/kubectl) base image to `1.29.0`
-  - Bumped [`noVNC`](https://github.com/novnc/noVNC/tree/master/app) to `1.5.0` <small>(contents in [`/static/app`](static/app))</small>
-  - Changed Service `NodePort` to `ClusterIP` ... thus intentionally removing access to `8001/tcp` from outside the k8s cluster
-  - Added IngressRoute with Basic HTTP-Auth using [Traefik MiddleWares](https://doc.traefik.io/traefik/middlewares/http/basicauth/)
-  - Added basic CSS styling using 
-  - Changed k8s definitions from `virtvnc` to `kv-novnc` in effort to avoid confusion amongst the various forks of the original [wavezhang/virtVNC](https://github.com/wavezhang/virtVNC) project
+- A static noVNC-based frontend served by `kubectl proxy`
+- VM table with phase, readiness, age, and console access
+- VM lifecycle actions: start, stop, restart
+- Traefik IngressRoute example with HTTP Basic Auth
+- Cluster-internal Service (`ClusterIP`) for safer exposure via ingress
 
-# Deployment Example
+## Architecture
 
-> [!NOTE]
-> The software in this repository is provided "as is" with absolutely no guarantees or warranties. [MIT License](LICENSE.md) applies.
+- Container image is built from `bitnami/kubectl:1.29.0`
+- Static web assets are copied to `/static`
+- Entrypoint runs:
+
+```bash
+kubectl proxy --www=/static --accept-hosts=^.*$ --address=[::] --api-prefix=/k8s/ --www-prefix=
+```
+
+This means the browser UI is static content, and all API calls are made via the proxy path `/k8s/...`.
 
 ## Prerequisites
 
-This deployment example assumes the following:
+- Kubernetes cluster with KubeVirt installed
+- Traefik installed (for the provided ingress example)
+- A namespace containing your target KubeVirt VMs
+- Permissions that allow listing VMs and accessing KubeVirt subresources
 
-  - Kubevirt installed in namespace `kubevirt`
-  - Traefik installed in namespace `traefik`
-  - Traefik `websecure` ingress endpoint exists
+## Quick Deploy (Manifest Included)
 
-## Steps
-1. Download the `kv-novnc.yaml` manifest 
+Use the provided manifest in [k8s/kv-novnc.yaml](k8s/kv-novnc.yaml).
+
+1. Review and edit defaults before applying:
+
 ```bash
-wget https://raw.githubusercontent.com/scog/kubevirt-novnc/main/k8s/kv-novnc.yaml
+kubectl apply --dry-run=client -f k8s/kv-novnc.yaml
 ```
 
-2. Edit `kv-novnc.yaml` and modify the default variables:
-```bash
-vim kv-novnc.yaml
+2. Update these values in [k8s/kv-novnc.yaml](k8s/kv-novnc.yaml):
 
----
-  data:
-    username: c29tZXVzZXI=    # default value: someuser (base64 encoded)
-    password: c29tZXBhc3M=    # default value: somepass (base64 encoded)
----
-  routes:
-    - match: "Host(`kv-novnc.localhost`)"    # Set desired hostname
-      kind: Rule
----
+- Basic auth secret in namespace `traefik`:
+  - `data.username` (base64)
+  - `data.password` (base64)
+- Traefik route host:
+  - `spec.routes[0].match` in `IngressRoute`
+
+3. Apply:
+
+```bash
+kubectl apply -f k8s/kv-novnc.yaml
 ```
 
-3. Deploy the `kv-novnc.yaml` manifest:
+4. Open the configured hostname over HTTPS.
+
+## Important Configuration Notes
+
+- The UI currently uses a fixed namespace in [static/index.html](static/index.html):
+  - `const namespace = 'virtual-azurion';`
+- The previously documented `?namespace=` query parameter is not used by the current code.
+- If your VMs are in a different namespace, change that constant and rebuild/redeploy the image.
+
+## Build And Publish
+
+Build locally:
+
 ```bash
-kubectl apply -f kv-novnc.yaml
+docker build -t kubevirt-novnc:local .
 ```
 
-4. Navigate to the hostname configured in `Host()` above... along with `?namespace=` URI parameter. For example:
-```bash
-https://kv-novnc.localhost/?namespace=kubevirt
-```
+If you publish to a registry, update the Deployment image in [k8s/kv-novnc.yaml](k8s/kv-novnc.yaml) accordingly.
 
-## Container Images
+## Security Notes
 
-Pre-built container images are available here: https://github.com/users/scog/packages/container/package/kubevirt-novnc
+- Basic auth is handled by Traefik middleware in the `traefik` namespace.
+- Service type is `ClusterIP`, so access is intended through ingress.
+- RBAC is cluster-scoped in the provided manifest. Review and tighten to your environment if needed.
 
-## Example Screenshot
+## Lineage
 
-![screenshot](https://raw.githubusercontent.com/scog/kubevirt-novnc/main/example.png)
+This repository was forked from [wavezhang/virtVNC](https://github.com/wavezhang/virtVNC) (commit [0fe6d5a](https://github.com/wavezhang/virtVNC/commit/0fe6d5a1ffdf9aed88dbd507f7b43a4cac5d343d)) and has been customized for this deployment model.
+
+## License
+
+MIT. See [LICENSE.md](LICENSE.md).
