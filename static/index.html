@@ -9,38 +9,239 @@
     <!-- ES2015/ES6 modules polyfill -->
     <script nomodule src="vendor/browser-es-module-loader/dist/browser-es-module-loader.js"></script>
     <script type="module" crossorigin="anonymous">
-      //import * as WebUtil from "./app/webutil.js";
-      const apiPrefix='k8s/apis'
-      function loadVMI(namespace) {
-        fetch('/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances/')
-          .then((resp) => resp.json())
-          .then((data) => {
-            if (data.items.length === 0) { 
-              let tr = document.createElement('tr');
-              tr.innerHTML="<th>No VM Instances found in namespace <b>" + namespace + "</b></th>";
-              document.getElementById("vmis").appendChild(tr);
-            } else {
-              data.items.forEach(i => {
-                let tr = document.createElement('tr');
-                tr.innerHTML="<td><button role='button' class='button-17' " + String(i.status.phase =="Running" ? "" : "disabled")  + " onclick=\"window.open('vnc.html?path=" + apiPrefix + "/subresources.kubevirt.io/v1alpha3/namespaces/" + namespace + "/virtualmachineinstances/" + i.metadata.name + "/vnc', 'novnc_window', 'resizable=yes,toolbar=no,location=no,status=no,scrollbars=no,menubar=no,width=1300,height=850')\">" + i.metadata.name + "</button></td><td>" + String(i.status.nodeName !== undefined ? i.status.nodeName : '') + "</td><td>" + String(i.status.phase) + "</td><td>" + String(i.status.interfaces !== undefined ? i.status.interfaces[0].ipAddress : '')  + "</td>";
-                document.getElementById("vmis").appendChild(tr);
-              });
+      const apiPrefix = 'k8s/apis';
+      const namespace = 'virtual-azurion';
+
+      function clearRows() {
+        document.getElementById('vmis').replaceChildren();
+      }
+
+      function addMessageRow(message) {
+        const tr = document.createElement('tr');
+        tr.className = 'table-message';
+        const th = document.createElement('th');
+        th.colSpan = 4;
+        th.textContent = message;
+        tr.appendChild(th);
+        document.getElementById('vmis').appendChild(tr);
+      }
+
+      async function getCurrentUsername() {
+        const url = '/' + apiPrefix + '/authentication.k8s.io/v1/selfsubjectreviews';
+        const body = {
+          apiVersion: 'authentication.k8s.io/v1',
+          kind: 'SelfSubjectReview'
+        };
+
+        try {
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+
+          if (!resp.ok) {
+            return 'unknown';
+          }
+
+          const review = await resp.json();
+          const username = review.status?.userInfo?.username;
+          return username ? String(username) : 'unknown';
+        } catch (err) {
+          return 'unknown';
+        }
+      }
+
+      function createVncButton(vmiName, phase) {
+        const btn = document.createElement('button');
+        btn.setAttribute('role', 'button');
+        btn.className = 'button-17';
+        btn.textContent = vmiName;
+        btn.disabled = phase !== 'Running';
+
+        const vncPath = apiPrefix + '/subresources.kubevirt.io/v1alpha3/namespaces/' +
+          namespace + '/virtualmachineinstances/' + encodeURIComponent(vmiName) + '/vnc';
+        const vncUrl = 'vnc.html?path=' + encodeURIComponent(vncPath);
+
+        btn.addEventListener('click', () => {
+          window.open(
+            vncUrl,
+            'novnc_window',
+            'resizable=yes,toolbar=no,location=no,status=no,scrollbars=no,menubar=no,width=1300,height=850'
+          );
+        });
+
+        return btn;
+      }
+
+      function appendVmiRow(vmi) {
+        const tr = document.createElement('tr');
+        const phase = String(vmi.status?.phase || 'Unknown');
+        const nodeName = String(vmi.status?.nodeName || '');
+        const ipAddress = String(vmi.status?.interfaces?.[0]?.ipAddress || '');
+
+        const vmTd = document.createElement('td');
+        vmTd.appendChild(createVncButton(vmi.metadata.name, phase));
+        tr.appendChild(vmTd);
+
+        const nodeTd = document.createElement('td');
+        nodeTd.textContent = nodeName;
+        tr.appendChild(nodeTd);
+
+        const phaseTd = document.createElement('td');
+        const phasePill = document.createElement('span');
+        phasePill.className = 'status-pill status-' + phase.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        phasePill.textContent = phase;
+        phaseTd.appendChild(phasePill);
+        tr.appendChild(phaseTd);
+
+        const ipTd = document.createElement('td');
+        ipTd.textContent = ipAddress;
+        tr.appendChild(ipTd);
+
+        document.getElementById('vmis').appendChild(tr);
+      }
+
+      function canListVmis(rule) {
+        const groups = Array.isArray(rule.apiGroups) ? rule.apiGroups : [];
+        const resources = Array.isArray(rule.resources) ? rule.resources : [];
+        const verbs = Array.isArray(rule.verbs) ? rule.verbs : [];
+
+        const groupMatch = groups.includes('*') || groups.includes('kubevirt.io');
+        const resourceMatch = resources.includes('*') || resources.includes('virtualmachineinstances');
+        const verbMatch = verbs.includes('*') || verbs.includes('list');
+
+        return groupMatch && resourceMatch && verbMatch;
+      }
+
+      async function discoverAuthorizedNames() {
+        const url = '/' + apiPrefix + '/authorization.k8s.io/v1/selfsubjectrulesreviews';
+        const body = {
+          apiVersion: 'authorization.k8s.io/v1',
+          kind: 'SelfSubjectRulesReview',
+          spec: { namespace: namespace }
+        };
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!resp.ok) {
+          throw new Error('Failed to load permissions: ' + resp.status);
+        }
+
+        const review = await resp.json();
+        const rules = Array.isArray(review.status?.resourceRules) ? review.status.resourceRules : [];
+        const matchedRules = rules.filter(canListVmis);
+
+        const names = new Set();
+        let allNamesAllowed = false;
+
+        matchedRules.forEach((rule) => {
+          const resourceNames = Array.isArray(rule.resourceNames) ? rule.resourceNames : [];
+          if (resourceNames.length === 0) {
+            allNamesAllowed = true;
+            return;
+          }
+
+          resourceNames.forEach((name) => {
+            if (name) {
+              names.add(name);
             }
-          })
-          .catch(err => console.log("Failed to get vmis: " + err));
-       }
-       let urlParams = new URLSearchParams(window.location.search);
-       let namespace = urlParams.get('namespace');
-       let title = "kv-novnc / " + String(window.location.host !== undefined ? window.location.host : '?')
-       document.getElementById("hdr").textContent = title;
-       loadVMI(namespace);
+          });
+        });
+
+        return {
+          allNamesAllowed: allNamesAllowed,
+          names: Array.from(names)
+        };
+      }
+
+      async function listAllVmis() {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances';
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          throw new Error('Failed to list VMIs: ' + resp.status);
+        }
+
+        const data = await resp.json();
+        return Array.isArray(data.items) ? data.items : [];
+      }
+
+      async function listVmiByName(name) {
+        const selector = encodeURIComponent('metadata.name=' + name);
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
+          '/virtualmachineinstances?fieldSelector=' + selector;
+
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          return null;
+        }
+
+        const data = await resp.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        return items.find((item) => item.metadata?.name === name) || null;
+      }
+
+      async function loadVmis() {
+        clearRows();
+        const username = await getCurrentUsername();
+
+        let discovered;
+        try {
+          discovered = await discoverAuthorizedNames();
+        } catch (err) {
+          console.error(err);
+          addMessageRow('Error: unable to load virtual azurions');
+          return;
+        }
+
+        let vmis = [];
+
+        if (discovered.allNamesAllowed) {
+          try {
+            vmis = await listAllVmis();
+          } catch (err) {
+            console.error(err);
+            addMessageRow('Error: unable to load virtual azurions');
+            return;
+          }
+        } else if (discovered.names.length > 0) {
+          const perNameResults = await Promise.all(discovered.names.map((name) => listVmiByName(name)));
+          vmis = perNameResults.filter((item) => item !== null);
+        }
+
+        if (vmis.length === 0) {
+          addMessageRow('No virtual azurions found for user ' + username);
+          return;
+        }
+
+        vmis.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
+        vmis.forEach(appendVmiRow);
+      }
+
+      loadVmis();
     </script>
   </meta>
   <body>
-    <h2 id="hdr"></h2>
-    <table>
-      <tr><th>VM Console</th><th>Node Name</th><th>Status</th><th>K8S IP Address</th></tr>
-      <tbody id="vmis"></tbody>
-    </table>
+    <main class="page-shell">
+      <header class="top-bar">
+        <div class="title-wrap">
+          <h1>KubeVirt Virtual Azurion</h1>
+        </div>
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Philips_logo.svg/960px-Philips_logo.svg.png" alt="Philips logo" class="philips-logo" />
+      </header>
+
+      <section class="table-card" aria-label="Virtual machine console listing">
+        <table>
+          <thead>
+            <tr><th>VM Console</th><th>Node Name</th><th>Status</th><th>K8S IP Address</th></tr>
+          </thead>
+          <tbody id="vmis"></tbody>
+        </table>
+      </section>
+    </main>
   </body>
 </html>
