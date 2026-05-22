@@ -82,12 +82,12 @@
           const resp = await fetch('/' + vmPath, { method: 'PUT' });
           if (!resp.ok) {
             console.error('Failed to ' + action + ' VM: ' + resp.status);
-          } else {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            loadVms();
           }
         } catch (err) {
           console.error('Error sending ' + action + ':', err);
+        } finally {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          loadVms();
         }
       }
 
@@ -95,10 +95,16 @@
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-control';
-        btn.textContent = phase === 'Running' ? 'Stop' : 'Start';
-        btn.setAttribute('data-action', phase === 'Running' ? 'stop' : 'start');
-
+        
+        const isRunning = phase === 'Running';
+        const isTransitional = ['Pending', 'Scheduling', 'Scheduled', 'Succeeded', 'Unknown'].includes(phase);
+        
+        btn.textContent = isRunning ? 'Stop' : 'Start';
+        btn.setAttribute('data-action', isRunning ? 'stop' : 'start');
+        btn.disabled = isTransitional;
+        
         btn.addEventListener('click', () => {
+          btn.disabled = true;
           const action = btn.getAttribute('data-action');
           sendStartStop(vmiName, action);
         });
@@ -241,19 +247,28 @@
         return items.find((item) => item.metadata?.name === name) || null;
       }
 
-      async function getVmiForVm(vmName) {
-        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
-          '/virtualmachineinstances/' + encodeURIComponent(vmName);
-
+      async function listAllVmis() {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances';
         try {
           const resp = await fetch(url);
           if (!resp.ok) {
-            return null;
+            return [];
           }
-          return await resp.json();
+          const data = await resp.json();
+          return Array.isArray(data.items) ? data.items : [];
         } catch (err) {
-          return null;
+          return [];
         }
+      }
+
+      function buildVmiMap(vmis) {
+        const map = new Map();
+        vmis.forEach((vmi) => {
+          if (vmi.metadata?.name) {
+            map.set(vmi.metadata.name, vmi);
+          }
+        });
+        return map;
       }
 
       async function loadVms() {
@@ -291,8 +306,11 @@
 
         vms.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
         
+        const vmis = await listAllVmis();
+        const vmiMap = buildVmiMap(vmis);
+        
         for (const vm of vms) {
-          const vmi = await getVmiForVm(vm.metadata.name);
+          const vmi = vmiMap.get(vm.metadata.name) || null;
           await appendVmRow(vm, vmi);
         }
       }
