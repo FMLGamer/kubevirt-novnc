@@ -11,6 +11,38 @@
     <script type="module" crossorigin="anonymous">
       const apiPrefix = 'k8s/apis';
       const namespace = 'virtual-azurion';
+      const ACTION_REFRESH_MS = 1000;
+
+      let actionRefreshTimerId = null;
+      let pendingActionVmNames = new Set();
+      let loadInProgress = false;
+      let loadQueued = false;
+
+      function startActionRefreshLoop() {
+        if (actionRefreshTimerId !== null) {
+          return;
+        }
+
+        actionRefreshTimerId = window.setInterval(() => {
+          if (pendingActionVmNames.size === 0) {
+            stopActionRefreshLoop();
+            return;
+          }
+          loadVms();
+        }, ACTION_REFRESH_MS);
+      }
+
+      function stopActionRefreshLoop() {
+        if (actionRefreshTimerId !== null) {
+          window.clearInterval(actionRefreshTimerId);
+          actionRefreshTimerId = null;
+        }
+      }
+
+      function trackVmAction(vmName) {
+        pendingActionVmNames.add(vmName);
+        startActionRefreshLoop();
+      }
 
       function clearRows() {
         document.getElementById('vmis').replaceChildren();
@@ -91,15 +123,24 @@
         }
       }
 
-      function createControlButton(vmiName, phase, readyStatus, fetchError) {
+      function getControlState(phase, readyStatus, fetchError) {
+        const canStart = !fetchError && (phase === 'Stopped' || phase === 'Failed') && readyStatus === 'Not Ready';
+        const canStop = !fetchError && phase === 'Running' && readyStatus === 'Ready';
+        const isBlocked = !(canStart || canStop);
+        return {
+          action: phase === 'Running' ? 'stop' : 'start',
+          isBlocked: isBlocked
+        };
+      }
+
+      function createControlButton(vmName, phase, readyStatus, fetchError) {
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-control';
         
-        const action = phase === 'Running' ? 'stop' : 'start';
-        const canStart = !fetchError && (phase === 'Stopped' || phase === 'Failed') && readyStatus === 'Not Ready';
-        const canStop = !fetchError && phase === 'Running' && readyStatus === 'Ready';
-        const isBlocked = !(canStart || canStop);
+        const controlState = getControlState(phase, readyStatus, fetchError);
+        const action = controlState.action;
+        const isBlocked = controlState.isBlocked;
 
         btn.textContent = isBlocked ? (action === 'stop' ? 'Stop (Blocked)' : 'Start (Blocked)') : (action === 'stop' ? 'Stop' : 'Start');
         btn.setAttribute('data-action', action);
@@ -112,7 +153,31 @@
         btn.addEventListener('click', () => {
           btn.disabled = true;
           const action = btn.getAttribute('data-action');
-          sendStartStop(vmiName, action);
+          trackVmAction(vmName);
+          sendStartStop(vmName, action);
+        });
+
+        return btn;
+      }
+
+      function createRestartButton(vmName, phase, readyStatus, fetchError) {
+        const btn = document.createElement('button');
+        btn.setAttribute('role', 'button');
+        btn.className = 'button-control button-control-restart';
+
+        const controlState = getControlState(phase, readyStatus, fetchError);
+        const isBlocked = controlState.isBlocked;
+
+        btn.textContent = isBlocked ? 'Restart (Blocked)' : 'Restart';
+        btn.disabled = isBlocked;
+        if (isBlocked) {
+          btn.title = 'Restart blocked until VM state is stable and VM info is available';
+        }
+
+        btn.addEventListener('click', () => {
+          btn.disabled = true;
+          trackVmAction(vmName);
+          sendStartStop(vmName, 'restart');
         });
 
         return btn;
@@ -144,6 +209,11 @@
         const tr = document.createElement('tr');
         const phase = fetchError ? 'Error' : (vmi ? String(vmi.status?.phase || 'Stopped') : 'Stopped');
         const readyStatus = fetchError ? 'Error' : (vmi ? getReadyStatus(vmi) : 'Not Ready');
+        const controlState = getControlState(phase, readyStatus, fetchError);
+
+        if (pendingActionVmNames.has(vm.metadata.name) && !controlState.isBlocked) {
+          pendingActionVmNames.delete(vm.metadata.name);
+        }
 
         const vmTd = document.createElement('td');
         vmTd.appendChild(createVncButton(vm.metadata.name, phase));
@@ -165,7 +235,11 @@
         tr.appendChild(readyTd);
 
         const controlTd = document.createElement('td');
-        controlTd.appendChild(createControlButton(vm.metadata.name, phase, readyStatus, fetchError));
+        const controlGroup = document.createElement('div');
+        controlGroup.className = 'control-group';
+        controlGroup.appendChild(createControlButton(vm.metadata.name, phase, readyStatus, fetchError));
+        controlGroup.appendChild(createRestartButton(vm.metadata.name, phase, readyStatus, fetchError));
+        controlTd.appendChild(controlGroup);
         tr.appendChild(controlTd);
 
         document.getElementById('vmis').appendChild(tr);
@@ -254,61 +328,91 @@
         return items.find((item) => item.metadata?.name === name) || null;
       }
 
-      async function getVmiForVm(vmName) {
-        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace +
-          '/virtualmachineinstances/' + encodeURIComponent(vmName);
+      async function listAllVmis() {
+        const url = '/' + apiPrefix + '/kubevirt.io/v1alpha3/namespaces/' + namespace + '/virtualmachineinstances';
 
         try {
           const resp = await fetch(url);
-          if (resp.status === 404) {
-            return { vmi: null, fetchError: false };
-          }
           if (!resp.ok) {
-            return { vmi: null, fetchError: true };
+            return { items: [], fetchError: true };
           }
-          return { vmi: await resp.json(), fetchError: false };
+          const data = await resp.json();
+          return {
+            items: Array.isArray(data.items) ? data.items : [],
+            fetchError: false
+          };
         } catch (err) {
-          return { vmi: null, fetchError: true };
+          return { items: [], fetchError: true };
         }
       }
 
-      async function loadVms() {
-        clearRows();
-        const username = await getCurrentUsername();
+      function buildVmiMap(vmis) {
+        const map = new Map();
+        vmis.forEach((vmi) => {
+          if (vmi.metadata?.name) {
+            map.set(vmi.metadata.name, vmi);
+          }
+        });
+        return map;
+      }
 
-        let discovered;
-        try {
-          discovered = await discoverAuthorizedNames();
-        } catch (err) {
-          console.error(err);
-          addMessageRow('Error: unable to load virtual azurions');
+      async function loadVms() {
+        if (loadInProgress) {
+          loadQueued = true;
           return;
         }
 
-        let vms = [];
+        loadInProgress = true;
+        clearRows();
+        const username = await getCurrentUsername();
 
-        if (discovered.allNamesAllowed) {
+        try {
+          let discovered;
           try {
-            vms = await listAllVms();
+            discovered = await discoverAuthorizedNames();
           } catch (err) {
             console.error(err);
             addMessageRow('Error: unable to load virtual azurions');
             return;
           }
-        } else if (discovered.names.length > 0) {
-          const perNameResults = await Promise.all(discovered.names.map((name) => listVmByName(name)));
-          vms = perNameResults.filter((item) => item !== null);
-        }
 
-        if (vms.length === 0) {
-          addMessageRow('No virtual azurions found for user ' + username);
-          return;
-        }
+          let vms = [];
 
-        vms.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
-        for (const vm of vms) {
-          const vmiResult = await getVmiForVm(vm.metadata.name);
-          await appendVmRow(vm, vmiResult.vmi, vmiResult.fetchError);
+          if (discovered.allNamesAllowed) {
+            try {
+              vms = await listAllVms();
+            } catch (err) {
+              console.error(err);
+              addMessageRow('Error: unable to load virtual azurions');
+              return;
+            }
+          } else if (discovered.names.length > 0) {
+            const perNameResults = await Promise.all(discovered.names.map((name) => listVmByName(name)));
+            vms = perNameResults.filter((item) => item !== null);
+          }
+
+          if (vms.length === 0) {
+            addMessageRow('No virtual azurions found for user ' + username);
+            return;
+          }
+
+          vms.sort((a, b) => String(a.metadata?.name || '').localeCompare(String(b.metadata?.name || '')));
+          const vmiListResult = await listAllVmis();
+          const vmiMap = buildVmiMap(vmiListResult.items);
+
+          for (const vm of vms) {
+            const vmi = vmiMap.get(vm.metadata.name) || null;
+            await appendVmRow(vm, vmi, vmiListResult.fetchError);
+          }
+        } finally {
+          loadInProgress = false;
+          if (pendingActionVmNames.size === 0) {
+            stopActionRefreshLoop();
+          }
+          if (loadQueued) {
+            loadQueued = false;
+            loadVms();
+          }
         }
       }
 

@@ -223,6 +223,11 @@ th[colspan] {
     border-color: #a92727;
 }
 
+.button-control-restart {
+    background: linear-gradient(180deg, #3f82de 0%, #2a63b8 100%);
+    border-color: #224f92;
+}
+
 .button-control:not(:disabled):hover {
     transform: translateY(-1px);
 }
@@ -235,6 +240,11 @@ th[colspan] {
 .button-control-stop:not(:disabled):hover {
     box-shadow: 0 6px 16px rgba(191, 47, 47, 0.35);
     background: linear-gradient(180deg, #ef5b5b, #cb3737);
+}
+
+.button-control-restart:not(:disabled):hover {
+    box-shadow: 0 6px 16px rgba(42, 99, 184, 0.35);
+    background: linear-gradient(180deg, #5293ec, #356fc8);
 }
 
 .button-control:focus-visible {
@@ -255,6 +265,12 @@ th[colspan] {
         #8b9dc7 16px
     );
     box-shadow: none;
+}
+
+.control-group {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
 }
 
 @media (max-width: 760px) {
