@@ -13,8 +13,10 @@
       const apiPrefix = 'k8s/apis';
       const namespace = 'virtual-azurion';
       const ACTION_REFRESH_MS = 1000;
+      const VM_LIST_REFRESH_MS = 60000;
 
       let actionRefreshTimerId = null;
+      let vmListRefreshTimerId = null;
       let pendingActionVmNames = new Set();
       let pendingActionMeta = new Map();
       let vmRowStateMap = new Map();
@@ -50,6 +52,16 @@
           window.clearInterval(actionRefreshTimerId);
           actionRefreshTimerId = null;
         }
+      }
+
+      function startVmListRefreshLoop() {
+        if (vmListRefreshTimerId !== null) {
+          return;
+        }
+
+        vmListRefreshTimerId = window.setInterval(() => {
+          loadVms();
+        }, VM_LIST_REFRESH_MS);
       }
 
       function trackVmAction(vmName) {
@@ -542,6 +554,7 @@
       }
 
       loadVms();
+      startVmListRefreshLoop();
     </script>
   </meta>
   <body>
