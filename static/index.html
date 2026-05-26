@@ -276,19 +276,108 @@
         btn.title = 'Delete this virtual azurion and close associated GitHub issue';
 
         btn.addEventListener('click', () => {
-          if (confirm('Are you sure you want to delete this virtual azurion?')) {
-            btn.disabled = true;
-            deleteVm(vmName).then((success) => {
-              if (success) {
-                loadVms();
-              } else {
-                btn.disabled = false;
-              }
-            });
-          }
+          showDeleteConfirmModal(vmName);
         });
 
         return btn;
+      }
+
+      function showDeleteConfirmModal(vmName) {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'delete-modal';
+
+        // Title
+        const title = document.createElement('h2');
+        title.className = 'modal-title';
+        title.textContent = 'Confirm Deletion';
+        modal.appendChild(title);
+
+        // Message
+        const message = document.createElement('p');
+        message.className = 'modal-message';
+        message.textContent = 'Are you sure you want to delete ' + vmName + '?';
+        modal.appendChild(message);
+
+        // Instruction
+        const instruction = document.createElement('p');
+        instruction.className = 'modal-instruction';
+        instruction.textContent = 'Type the exact VM name to confirm:';
+        modal.appendChild(instruction);
+
+        // Input field
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'modal-input';
+        input.placeholder = 'Enter VM name';
+        input.autocomplete = 'off';
+        modal.appendChild(input);
+
+        // Error message
+        const errorMsg = document.createElement('p');
+        errorMsg.className = 'modal-error';
+        errorMsg.textContent = 'VM name does not match';
+        errorMsg.style.display = 'none';
+        modal.appendChild(errorMsg);
+
+        // Button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'modal-buttons';
+
+        // Cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'modal-button modal-button-cancel';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', () => {
+          document.body.removeChild(overlay);
+        });
+        buttonContainer.appendChild(cancelBtn);
+
+        // Confirm button
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'modal-button modal-button-confirm';
+        confirmBtn.textContent = 'Confirm';
+        confirmBtn.disabled = true;
+        confirmBtn.addEventListener('click', () => {
+          if (input.value === vmName) {
+            overlay.style.pointerEvents = 'none';
+            confirmBtn.disabled = true;
+            cancelBtn.disabled = true;
+            deleteVm(vmName).then((success) => {
+              if (success) {
+                loadVms();
+              }
+              document.body.removeChild(overlay);
+            });
+          } else {
+            input.classList.add('modal-input-error');
+            errorMsg.style.display = 'block';
+          }
+        });
+        buttonContainer.appendChild(confirmBtn);
+
+        modal.appendChild(buttonContainer);
+
+        // Validate input on every change
+        input.addEventListener('input', () => {
+          if (input.value === vmName) {
+            input.classList.remove('modal-input-error');
+            errorMsg.style.display = 'none';
+            confirmBtn.disabled = false;
+          } else {
+            confirmBtn.disabled = true;
+            input.classList.remove('modal-input-error');
+            errorMsg.style.display = 'none';
+          }
+        });
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        input.focus();
       }
 
       function createRestartButton(vmName, phase, readyStatus, fetchError) {
@@ -426,8 +515,11 @@
 
         const deleteTd = document.createElement('td');
         deleteTd.className = 'delete-cell';
-        const deleteButton = createDeleteButton(vm.metadata.name);
-        deleteTd.appendChild(deleteButton);
+        const vmNameStr = vm.metadata?.name || '';
+        if (vmNameStr.match(/^va-issue\d+$/)) {
+          const deleteButton = createDeleteButton(vmNameStr);
+          deleteTd.appendChild(deleteButton);
+        }
         tr.appendChild(deleteTd);
 
         document.getElementById('vmis').appendChild(tr);

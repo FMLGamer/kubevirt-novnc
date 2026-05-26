@@ -275,27 +275,174 @@ th[colspan] {
 
 .delete-header,
 .controls-header {
+    .delete-cell {\n    padding-left: 16px;\n    padding-right: 16px;\n    text-align: left;\n    white-space: nowrap;\n}\n\n.button-control-delete {\n    background: linear-gradient(180deg, #e54c4c 0%, #bf2f2f 100%);\n    border-color: #a92727;\n}\n\n.button-control-delete:not(:disabled):hover {\n    box-shadow: 0 6px 16px rgba(191, 47, 47, 0.35);\n    background: linear-gradient(180deg, #ef5b5b, #cb3737);\n}
     white-space: nowrap;
     text-align: left;
     padding-left: 16px;
     padding-right: 16px;
 }
 
-.delete-cell {
-    padding-left: 16px;
-    padding-right: 16px;
-    text-align: left;
-    white-space: nowrap;
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(11, 31, 73, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
 }
 
-.button-control-delete {
-    background: linear-gradient(180deg, #e54c4c 0%, #bf2f2f 100%);
-    border-color: #a92727;
+.delete-modal {
+    background: var(--surface-2);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 20px 60px rgba(13, 41, 106, 0.3);
+    padding: 32px;
+    max-width: 400px;
+    width: 90vw;
+    animation: slideIn 200ms ease-out;
 }
 
-.button-control-delete:not(:disabled):hover {
-    box-shadow: 0 6px 16px rgba(191, 47, 47, 0.35);
-    background: linear-gradient(180deg, #ef5b5b, #cb3737);
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-title {
+    margin: 0 0 16px 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--ink-900);
+}
+
+.modal-message {
+    margin: 0 0 20px 0;
+    font-size: 0.95rem;
+    color: var(--text-0);
+    line-height: 1.5;
+}
+
+.modal-instruction {
+    margin: 0 0 12px 0;
+    font-size: 0.85rem;
+    color: var(--text-1);
+    font-weight: 600;
+}
+
+.modal-input {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    margin: 0 0 16px 0;
+    font-size: 0.95rem;
+    border: 1px solid #c4d3ff;
+    border-radius: 8px;
+    background: var(--surface-0);
+    color: var(--text-0);
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.modal-input:focus {
+    outline: none;
+    border-color: #407dff;
+    box-shadow: 0 0 0 3px rgba(64, 125, 255, 0.1);
+    background: var(--surface-2);
+}
+
+.modal-input-error {
+    border-color: #e54c4c !important;
+    background: rgba(229, 76, 76, 0.05) !important;
+}
+
+.modal-input-error:focus {
+    box-shadow: 0 0 0 3px rgba(229, 76, 76, 0.1) !important;
+}
+
+.modal-error {
+    margin: 0 0 16px 0;
+    font-size: 0.82rem;
+    color: #e54c4c;
+    font-weight: 600;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.modal-button {
+    appearance: none;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 10px 18px;
+    transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.modal-button:focus-visible {
+    outline: 2px solid #407dff;
+    outline-offset: 2px;
+}
+
+.modal-button-cancel {
+    background: linear-gradient(180deg, #ffffff 0%, #e9f0ff 100%);
+    border-color: #c4d3ff;
+    color: var(--ink-900);
+    box-shadow: 0 2px 8px rgba(20, 53, 132, 0.15);
+}
+
+.modal-button-cancel:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(22, 61, 152, 0.18);
+    background: linear-gradient(180deg, #ffffff 0%, #dce8ff 100%);
+}
+
+.modal-button-cancel:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.modal-button-confirm {
+    background: linear-gradient(180deg, #3f82de 0%, #2a63b8 100%);
+    border-color: #224f92;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+
+.modal-button-confirm:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(42, 99, 184, 0.35);
+    background: linear-gradient(180deg, #5293ec, #356fc8);
+}
+
+.modal-button-confirm:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
+    background: repeating-linear-gradient(
+        135deg,
+        #99a9cf 0,
+        #99a9cf 8px,
+        #8b9dc7 8px,
+        #8b9dc7 16px
+    );
+    border-color: #7e8fb9;
 }
 
 .vm-name-cell {
