@@ -306,14 +306,14 @@
         // Instruction
         const instruction = document.createElement('p');
         instruction.className = 'modal-instruction';
-        instruction.textContent = 'Type the exact VM name to confirm:';
+        instruction.textContent = 'Type ' + vmName + ' to confirm:';
         modal.appendChild(instruction);
 
         // Input field
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'modal-input';
-        input.placeholder = 'Enter VM name';
+        input.placeholder = 'Enter name';
         input.autocomplete = 'off';
         modal.appendChild(input);
 
