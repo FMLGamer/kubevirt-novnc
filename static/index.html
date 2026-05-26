@@ -290,6 +290,8 @@
 
         return btn;
       }
+
+      function createRestartButton(vmName, phase, readyStatus, fetchError) {
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-control button-control-restart';
@@ -311,6 +313,7 @@
 
         return btn;
       }
+
 
       function renderControlGroup(controlGroup, vmName, phase, readyStatus, fetchError) {
         controlGroup.replaceChildren(
