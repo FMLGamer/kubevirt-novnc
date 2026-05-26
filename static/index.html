@@ -223,17 +223,8 @@
 
       async function closeGithubIssue(issueNumber) {
         try {
-          // Try to get GitHub token from sessionStorage or localStorage
+          // Use GitHub token that the user has already provided to the browser app
           let token = sessionStorage.getItem('github_token') || localStorage.getItem('github_token');
-          
-          if (!token) {
-            // Try to fetch from a backend endpoint that provides the GitHub token
-            const tokenResp = await fetch('/' + apiPrefix + '/github-token');
-            if (tokenResp.ok) {
-              const tokenData = await tokenResp.json();
-              token = tokenData.token;
-            }
-          }
 
           if (!token) {
             console.warn('No GitHub token available to close issue');
@@ -243,61 +234,20 @@
           const owner = 'philips-internal';
           const repository = 'igts-aicompanion-platform-engineering';
 
-          const issueLookupResp = await fetch('https://api.github.com/graphql', {
+          const commentResp = await fetch('https://api.github.com/repos/' + owner + '/' + repository + '/issues/' + Number(issueNumber) + '/comments', {
             method: 'POST',
             headers: {
               'Authorization': 'Bearer ' + token,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept': 'application/vnd.github+json'
             },
             body: JSON.stringify({
-              query: 'query($owner: String!, $repository: String!, $number: Int!) { repository(owner: $owner, name: $repository) { issue(number: $number) { id } } }',
-              variables: {
-                owner: owner,
-                repository: repository,
-                number: Number(issueNumber)
-              }
+              body: '/close'
             })
           });
 
-          if (!issueLookupResp.ok) {
-            console.error('Failed to look up GitHub issue node id: ' + issueLookupResp.status);
-            return;
-          }
-
-          const issueLookupData = await issueLookupResp.json();
-          if (issueLookupData.errors?.length) {
-            console.error('Failed to look up GitHub issue node id:', issueLookupData.errors);
-            return;
-          }
-
-          const issueId = issueLookupData.data?.repository?.issue?.id;
-          if (!issueId) {
-            console.error('GitHub issue not found for number: ' + issueNumber);
-            return;
-          }
-
-          const closeResp = await fetch('https://api.github.com/graphql', {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + token,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              query: 'mutation($issueId: ID!) { closeIssue(input: { issueId: $issueId }) { issue { id state } } }',
-              variables: {
-                issueId: issueId
-              }
-            })
-          });
-
-          if (!closeResp.ok) {
-            console.error('Failed to close GitHub issue: ' + closeResp.status);
-            return;
-          }
-
-          const closeData = await closeResp.json();
-          if (closeData.errors?.length) {
-            console.error('Failed to close GitHub issue:', closeData.errors);
+          if (!commentResp.ok) {
+            console.error('Failed to add /close comment to GitHub issue: ' + commentResp.status);
           }
         } catch (err) {
           console.error('Error closing GitHub issue:', err);
