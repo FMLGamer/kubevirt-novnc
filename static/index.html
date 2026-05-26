@@ -327,6 +327,20 @@
         vmTd.appendChild(vncButton);
         tr.appendChild(vmTd);
 
+        const issueTd = document.createElement('td');
+        issueTd.className = 'issue-cell';
+        const issueMatch = (vm.metadata?.name || '').match(/^va-issue(\d+)$/);
+        if (issueMatch) {
+          const issueBtn = document.createElement('a');
+          issueBtn.className = 'button-issue';
+          issueBtn.href = 'https://github.com/philips-internal/igts-aicompanion-platform-engineering/issues/' + issueMatch[1];
+          issueBtn.target = '_blank';
+          issueBtn.rel = 'noopener noreferrer';
+          issueBtn.textContent = '#' + issueMatch[1];
+          issueTd.appendChild(issueBtn);
+        }
+        tr.appendChild(issueTd);
+
         const controlTd = document.createElement('td');
         controlTd.className = 'controls-cell';
         const controlGroup = document.createElement('div');
@@ -555,6 +569,14 @@
 
       loadVms();
       startVmListRefreshLoop();
+
+      document.getElementById('btn-refresh-vms').addEventListener('click', function () {
+        const btn = this;
+        btn.disabled = true;
+        loadVms().finally(function () {
+          btn.disabled = false;
+        });
+      });
     </script>
   </meta>
   <body>
@@ -569,16 +591,21 @@
       <section class="table-card" aria-label="Virtual machine console listing">
         <table>
           <thead>
-            <tr><th>VM Name</th><th>Status</th><th>Ready</th><th>Age</th><th>VM Console</th><th class="controls-header">Controls</th></tr>
+            <tr><th>Name</th><th>Status</th><th>Ready</th><th>Age</th><th>Console</th><th>Issue</th><th class="controls-header">Controls</th></tr>
           </thead>
           <tbody id="vmis"></tbody>
         </table>
       </section>
 
-      <section class="info-note" aria-label="Console availability note">
-        <span class="warn-triangle" aria-hidden="true"><span>!</span></span>
-        <span>The Virtual Azurion needs some time to boot up 30-60s, when connecting you might not see anything during that time.</span>
-      </section>
+      <div class="bottom-bar">
+        <section class="info-note" aria-label="Console availability note">
+          <span class="warn-triangle" aria-hidden="true"><span>!</span></span>
+          <span class="info-note-text">The Virtual Azurion needs some time to boot up (~60s). When connecting, you might not see anything during that time.</span>
+        </section>
+        <section class="refresh-card" aria-label="Refresh VM list">
+          <button id="btn-refresh-vms" class="button-refresh-vms" title="Refresh VM list">&#8635; Refresh</button>
+        </section>
+      </div>
     </main>
   </body>
 </html>
