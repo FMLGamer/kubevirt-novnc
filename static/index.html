@@ -203,7 +203,93 @@
         return btn;
       }
 
-      function createRestartButton(vmName, phase, readyStatus, fetchError) {
+      async function deleteVm(vmName) {
+        const vmPath = apiPrefix + '/kubevirt.io/v1/namespaces/' +
+          namespace + '/virtualmachines/' + encodeURIComponent(vmName);
+
+        try {
+          // Close the GitHub issue if this is a va-issue VM
+          const issueMatch = vmName.match(/^va-issue(\d+)$/);
+          if (issueMatch) {
+            const issueNumber = issueMatch[1];
+            await closeGithubIssue(issueNumber);
+          }
+
+          // Delete the VM
+          const resp = await fetch('/' + vmPath, { method: 'DELETE' });
+          if (!resp.ok) {
+            console.error('Failed to delete VM: ' + resp.status);
+            alert('Failed to delete virtual azurion');
+            return false;
+          }
+          return true;
+        } catch (err) {
+          console.error('Error deleting VM:', err);
+          alert('Error deleting virtual azurion: ' + err.message);
+          return false;
+        }
+      }
+
+      async function closeGithubIssue(issueNumber) {
+        try {
+          // Try to get GitHub token from sessionStorage or localStorage
+          let token = sessionStorage.getItem('github_token') || localStorage.getItem('github_token');
+          
+          if (!token) {
+            // Try to fetch from a backend endpoint that provides the GitHub token
+            const tokenResp = await fetch('/' + apiPrefix + '/github-token');
+            if (tokenResp.ok) {
+              const tokenData = await tokenResp.json();
+              token = tokenData.token;
+            }
+          }
+
+          if (!token) {
+            console.warn('No GitHub token available to close issue');
+            return;
+          }
+
+          const url = 'https://api.github.com/repos/philips-internal/igts-aicompanion-platform-engineering/issues/' + issueNumber;
+          const resp = await fetch(url, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'Content-Type': 'application/json',
+              'Accept': 'application/vnd.github.v3+json'
+            },
+            body: JSON.stringify({ state: 'closed' })
+          });
+
+          if (!resp.ok) {
+            console.error('Failed to close GitHub issue: ' + resp.status);
+          }
+        } catch (err) {
+          console.error('Error closing GitHub issue:', err);
+        }
+      }
+
+      function createDeleteButton(vmName) {
+        const btn = document.createElement('button');
+        btn.setAttribute('role', 'button');
+        btn.className = 'button-control button-control-delete';
+        btn.textContent = 'Delete';
+        btn.title = 'Delete this virtual azurion and close associated GitHub issue';
+
+        btn.addEventListener('click', () => {
+          if (confirm('Are you sure you want to delete this virtual azurion?')) {
+            btn.disabled = true;
+            deleteVm(vmName).then((success) => {
+              if (success) {
+                loadVms();
+              } else {
+                btn.disabled = false;
+              }
+            });
+          }
+        });
+
+        return btn;
+      }
         const btn = document.createElement('button');
         btn.setAttribute('role', 'button');
         btn.className = 'button-control button-control-restart';
@@ -340,6 +426,12 @@
           issueTd.appendChild(issueBtn);
         }
         tr.appendChild(issueTd);
+
+        const deleteTd = document.createElement('td');
+        deleteTd.className = 'delete-cell';
+        const deleteButton = createDeleteButton(vm.metadata.name);
+        deleteTd.appendChild(deleteButton);
+        tr.appendChild(deleteTd);
 
         const controlTd = document.createElement('td');
         controlTd.className = 'controls-cell';
@@ -591,7 +683,7 @@
       <section class="table-card" aria-label="Virtual machine console listing">
         <table>
           <thead>
-            <tr><th>Name</th><th>Status</th><th>Ready</th><th>Issue</th><th>Age</th><th>Console</th><th class="controls-header">Controls</th></tr>
+            <tr><th>Name</th><th>Status</th><th>Ready</th><th>Age</th><th>Console</th><th class="controls-header">Controls</th><th>Issue</th><th class="delete-header">Delete</th></tr>
           </thead>
           <tbody id="vmis"></tbody>
         </table>
