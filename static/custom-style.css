@@ -273,27 +273,28 @@ th[colspan] {
 
 .delete-header,
 .controls-header {
-    .delete-cell {
-        padding-left: 16px;
-        padding-right: 16px;
-        text-align: left;
-        white-space: nowrap;
-    }
-
-    .button-control-delete {
-        background: linear-gradient(180deg, #e54c4c 0%, #bf2f2f 100%);
-        border-color: #a92727;
-    }
-
-    .button-control-delete:not(:disabled):hover {
-        box-shadow: 0 6px 16px rgba(191, 47, 47, 0.35);
-        background: linear-gradient(180deg, #ef5b5b, #cb3737);
-    }
-
     white-space: nowrap;
     text-align: left;
     padding-left: 16px;
     padding-right: 16px;
+}
+
+.delete-cell {
+    padding-left: 16px;
+    padding-right: 16px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.button-control-delete {
+    background: linear-gradient(180deg, #e54c4c 0%, #bf2f2f 100%);
+    border-color: #a92727;
+    color: #ffffff;
+}
+
+.button-control-delete:not(:disabled):hover {
+    box-shadow: 0 6px 16px rgba(191, 47, 47, 0.35);
+    background: linear-gradient(180deg, #ef5b5b, #cb3737);
 }
 
 .modal-overlay {
