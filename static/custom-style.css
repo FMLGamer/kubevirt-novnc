@@ -271,7 +271,7 @@ th[colspan] {
     align-items: center;
 }
 
-.delete-header,
+.issue-header,
 .controls-header {
     white-space: nowrap;
     text-align: left;

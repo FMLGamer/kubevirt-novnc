@@ -12,6 +12,7 @@
     <script type="module" crossorigin="anonymous">
       const apiPrefix = 'k8s/apis';
       const namespace = 'virtual-azurion';
+      const githubIssueBaseUrl = 'https://github.com/philips-internal/igts-aicompanion-platform-engineering/issues/';
       const ACTION_REFRESH_MS = 1000;
       const VM_LIST_REFRESH_MS = 60000;
 
@@ -419,6 +420,23 @@
         return btn;
       }
 
+      function createIssueLink(vmName) {
+        const issueMatch = String(vmName || '').match(/^va-issue(\d+)$/);
+        if (!issueMatch) {
+          return null;
+        }
+
+        const issueNumber = issueMatch[1];
+        const link = document.createElement('a');
+        link.className = 'button-issue';
+        link.href = githubIssueBaseUrl + issueNumber;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Issue #' + issueNumber;
+        link.title = 'Open GitHub issue #' + issueNumber;
+        return link;
+      }
+
       function updateVmRowState(vmName, vmi, fetchError) {
         const rowState = vmRowStateMap.get(vmName);
         if (!rowState) {
@@ -499,14 +517,14 @@
         controlTd.appendChild(controlGroup);
         tr.appendChild(controlTd);
 
-        const deleteTd = document.createElement('td');
-        deleteTd.className = 'delete-cell';
+        const issueTd = document.createElement('td');
+        issueTd.className = 'issue-cell';
         const vmNameStr = vm.metadata?.name || '';
-        if (vmNameStr.match(/^va-issue\d+$/)) {
-          const deleteButton = createDeleteButton(vmNameStr);
-          deleteTd.appendChild(deleteButton);
+        const issueLink = createIssueLink(vmNameStr);
+        if (issueLink) {
+          issueTd.appendChild(issueLink);
         }
-        tr.appendChild(deleteTd);
+        tr.appendChild(issueTd);
 
         document.getElementById('vmis').appendChild(tr);
         vmRowStateMap.set(vm.metadata.name, {
@@ -750,7 +768,7 @@
       <section class="table-card" aria-label="Virtual machine console listing">
         <table>
           <thead>
-            <tr><th>Name</th><th>Status</th><th>Ready</th><th>Age</th><th>Console</th><th class="controls-header">Controls</th><th class="delete-header">Delete</th></tr>
+            <tr><th>Name</th><th>Status</th><th>Ready</th><th>Age</th><th>Console</th><th class="controls-header">Controls</th><th class="issue-header">Issue</th></tr>
           </thead>
           <tbody id="vmis"></tbody>
         </table>
