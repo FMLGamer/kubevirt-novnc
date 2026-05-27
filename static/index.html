@@ -308,14 +308,10 @@
         const stepUseExisting = document.createElement('li');
         stepUseExisting.textContent = 'Open the issue that belongs to the problematic VM (from the buttons below).';
 
-        const stepAdmin = document.createElement('li');
-        stepAdmin.textContent = 'Add an admin to your issue.';
-
         const stepComment = document.createElement('li');
-        stepComment.textContent = 'Post a comment with your question and relevant VM details.';
+        stepComment.textContent = 'Post your question in a comment and tag one of the admins (repository contributors).';
 
         steps.appendChild(stepUseExisting);
-        steps.appendChild(stepAdmin);
         steps.appendChild(stepComment);
 
         const tableIssueLinks = Array.from(document.querySelectorAll('#vmis .issue-cell a.button-issue'));
