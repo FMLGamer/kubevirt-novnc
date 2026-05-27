@@ -30,7 +30,7 @@
         return String(state.phase) + '|' + String(state.readyStatus) + '|' + String(state.fetchError);
       }
 
-      function shouldDisableVncButton(vmName, phase, controlState) {
+      function shouldDisableVncButton(phase, controlState) {
         return phase !== 'Running' || controlState.isBlocked;
       }
 
@@ -168,7 +168,10 @@
       }
 
       function getControlState(phase, readyStatus, fetchError) {
-        const canStart = !fetchError && (phase === 'Stopped' || phase === 'Failed') && readyStatus === 'Not Ready';
+        const canStart = !fetchError && (
+          ((phase === 'Stopped' || phase === 'Failed') && readyStatus === 'Not Ready') ||
+          phase === 'Succeeded'
+        );
         const canStop = !fetchError && phase === 'Running' && readyStatus === 'Ready';
         const isBlocked = !(canStart || canStop);
         return {
@@ -202,169 +205,6 @@
         });
 
         return btn;
-      }
-
-      async function deleteVm(vmName) {
-        const vmPath = apiPrefix + '/kubevirt.io/v1/namespaces/' +
-          namespace + '/virtualmachines/' + encodeURIComponent(vmName);
-
-        try {
-          // Close the GitHub issue if this is a va-issue VM
-          const issueMatch = vmName.match(/^va-issue(\d+)$/);
-          if (issueMatch) {
-            const issueNumber = issueMatch[1];
-            await closeGithubIssue(issueNumber);
-          }
-        } catch (err) {
-          console.error('Error deleting VM:', err);
-          alert('Error deleting virtual azurion: ' + err.message);
-          return false;
-        }
-      }
-
-      async function closeGithubIssue(issueNumber) {
-        try {
-          // Use GitHub token that the user has already provided to the browser app
-          let token = sessionStorage.getItem('github_token') || localStorage.getItem('github_token');
-
-          if (!token) {
-            console.warn('No GitHub token available to close issue');
-            return;
-          }
-
-          const owner = 'philips-internal';
-          const repository = 'igts-aicompanion-platform-engineering';
-
-          const commentResp = await fetch('https://api.github.com/repos/' + owner + '/' + repository + '/issues/' + Number(issueNumber) + '/comments', {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + token,
-              'Content-Type': 'application/json',
-              'Accept': 'application/vnd.github+json'
-            },
-            body: JSON.stringify({
-              body: '/close'
-            })
-          });
-
-          if (!commentResp.ok) {
-            console.error('Failed to add /close comment to GitHub issue: ' + commentResp.status);
-          }
-        } catch (err) {
-          console.error('Error closing GitHub issue:', err);
-        }
-      }
-
-      function createDeleteButton(vmName) {
-        const btn = document.createElement('button');
-        btn.setAttribute('role', 'button');
-        btn.className = 'button-control button-control-delete';
-        btn.textContent = 'Delete';
-        btn.title = 'Delete this virtual azurion and close associated GitHub issue';
-
-        btn.addEventListener('click', () => {
-          showDeleteConfirmModal(vmName);
-        });
-
-        return btn;
-      }
-
-      function showDeleteConfirmModal(vmName) {
-        // Create modal overlay
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-
-        // Create modal
-        const modal = document.createElement('div');
-        modal.className = 'delete-modal';
-
-        // Title
-        const title = document.createElement('h2');
-        title.className = 'modal-title';
-        title.textContent = 'Confirm Deletion';
-        modal.appendChild(title);
-
-        // Message
-        const message = document.createElement('p');
-        message.className = 'modal-message';
-        message.textContent = 'Are you sure you want to delete ' + vmName + '?';
-        modal.appendChild(message);
-
-        // Instruction
-        const instruction = document.createElement('p');
-        instruction.className = 'modal-instruction';
-        instruction.textContent = 'Type ' + vmName + ' to confirm:';
-        modal.appendChild(instruction);
-
-        // Input field
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'modal-input';
-        input.placeholder = 'Enter name';
-        input.autocomplete = 'off';
-        modal.appendChild(input);
-
-        // Error message
-        const errorMsg = document.createElement('p');
-        errorMsg.className = 'modal-error';
-        errorMsg.textContent = 'VM name does not match';
-        errorMsg.style.display = 'none';
-        modal.appendChild(errorMsg);
-
-        // Button container
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'modal-buttons';
-
-        // Cancel button
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'modal-button modal-button-cancel';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.addEventListener('click', () => {
-          document.body.removeChild(overlay);
-        });
-        buttonContainer.appendChild(cancelBtn);
-
-        // Confirm button
-        const confirmBtn = document.createElement('button');
-        confirmBtn.className = 'modal-button modal-button-confirm';
-        confirmBtn.textContent = 'Confirm';
-        confirmBtn.disabled = true;
-        confirmBtn.addEventListener('click', () => {
-          if (input.value === vmName) {
-            overlay.style.pointerEvents = 'none';
-            confirmBtn.disabled = true;
-            cancelBtn.disabled = true;
-            deleteVm(vmName).then((success) => {
-              if (success) {
-                loadVms();
-              }
-              document.body.removeChild(overlay);
-            });
-          } else {
-            input.classList.add('modal-input-error');
-            errorMsg.style.display = 'block';
-          }
-        });
-        buttonContainer.appendChild(confirmBtn);
-
-        modal.appendChild(buttonContainer);
-
-        // Validate input on every change
-        input.addEventListener('input', () => {
-          if (input.value === vmName) {
-            input.classList.remove('modal-input-error');
-            errorMsg.style.display = 'none';
-            confirmBtn.disabled = false;
-          } else {
-            confirmBtn.disabled = true;
-            input.classList.remove('modal-input-error');
-            errorMsg.style.display = 'none';
-          }
-        });
-
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-        input.focus();
       }
 
       function createRestartButton(vmName, phase, readyStatus, fetchError) {
@@ -470,11 +310,11 @@
           rowState.phasePill.className = 'status-pill status-' + nextState.phase.toLowerCase().replace(/[^a-z0-9]+/g, '-');
           rowState.phasePill.textContent = nextState.phase;
           rowState.readyTd.textContent = nextState.readyStatus;
-          rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
+          rowState.vncButton.disabled = shouldDisableVncButton(nextState.phase, nextState.controlState);
           rowState.currentState = nextState;
         }
 
-        rowState.vncButton.disabled = shouldDisableVncButton(vmName, nextState.phase, nextState.controlState);
+        rowState.vncButton.disabled = shouldDisableVncButton(nextState.phase, nextState.controlState);
         renderControlGroup(rowState.controlGroup, vmName, nextState.phase, nextState.readyStatus, nextState.fetchError);
         rowState.currentState = nextState;
       }
@@ -505,7 +345,7 @@
 
         const vmTd = document.createElement('td');
         vmTd.className = 'console-cell';
-        const vncButton = createVncButton(vm.metadata.name, shouldDisableVncButton(vm.metadata.name, state.phase, state.controlState));
+        const vncButton = createVncButton(vm.metadata.name, shouldDisableVncButton(state.phase, state.controlState));
         vmTd.appendChild(vncButton);
         tr.appendChild(vmTd);
 

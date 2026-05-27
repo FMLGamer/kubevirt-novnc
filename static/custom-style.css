@@ -141,12 +141,17 @@ th[colspan] {
 }
 
 .status-succeeded,
-.status-failed,
 .status-pending,
 .status-unknown {
     background: var(--warn-bg);
     border-color: #ffd990;
     color: var(--warn-fg);
+}
+
+.status-failed {
+    background: #ffe8e8;
+    border-color: #f4a9a9;
+    color: #9f2222;
 }
 
 .button-17 {
