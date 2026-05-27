@@ -277,6 +277,101 @@
         return link;
       }
 
+      function closeModalByOverlay(overlay, event) {
+        if (event.target === overlay) {
+          document.body.removeChild(overlay);
+        }
+      }
+
+      function openQuestionModal() {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'delete-modal info-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'question-modal-title');
+
+        const title = document.createElement('h2');
+        title.className = 'modal-title';
+        title.id = 'question-modal-title';
+        title.textContent = 'Question or Access Help';
+
+        const message = document.createElement('p');
+        message.className = 'modal-message';
+        message.textContent = 'If you have a question about a Virtual Azurion VM, use the existing issue linked to that VM in the table below.';
+
+        const steps = document.createElement('ol');
+        steps.className = 'modal-steps';
+
+        const stepUseExisting = document.createElement('li');
+        stepUseExisting.textContent = 'Open the issue that belongs to the problematic VM (from the buttons below).';
+
+        const stepAdmin = document.createElement('li');
+        stepAdmin.textContent = 'Add an admin to your issue.';
+
+        const stepComment = document.createElement('li');
+        stepComment.textContent = 'Post a comment with your question and relevant VM details.';
+
+        steps.appendChild(stepUseExisting);
+        steps.appendChild(stepAdmin);
+        steps.appendChild(stepComment);
+
+        const tableIssueLinks = Array.from(document.querySelectorAll('#vmis .issue-cell a.button-issue'));
+        const issuePanel = document.createElement('div');
+        issuePanel.className = 'modal-issue-panel';
+
+        const issuePanelTitle = document.createElement('p');
+        issuePanelTitle.className = 'modal-instruction';
+        issuePanelTitle.textContent = 'Issues available from the current VM list:';
+        issuePanel.appendChild(issuePanelTitle);
+
+        if (tableIssueLinks.length > 0) {
+          const issueButtons = document.createElement('div');
+          issueButtons.className = 'modal-issue-buttons';
+
+          tableIssueLinks.forEach((tableLink) => {
+            const issueButton = document.createElement('a');
+            issueButton.className = 'button-issue modal-issue-link';
+            issueButton.href = tableLink.href;
+            issueButton.target = '_blank';
+            issueButton.rel = 'noopener noreferrer';
+            issueButton.textContent = tableLink.textContent || 'Issue';
+            issueButtons.appendChild(issueButton);
+          });
+
+          issuePanel.appendChild(issueButtons);
+        } else {
+          const noIssueMessage = document.createElement('p');
+          noIssueMessage.className = 'modal-message';
+          noIssueMessage.textContent = 'No issue links are currently visible. Refresh the VM list and verify VM names follow va-issue<number>.';
+          issuePanel.appendChild(noIssueMessage);
+        }
+
+        const buttons = document.createElement('div');
+        buttons.className = 'modal-buttons';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'modal-button modal-button-confirm';
+        closeBtn.textContent = 'Close';
+        closeBtn.addEventListener('click', () => {
+          document.body.removeChild(overlay);
+        });
+
+        buttons.appendChild(closeBtn);
+        modal.appendChild(title);
+        modal.appendChild(message);
+        modal.appendChild(steps);
+        modal.appendChild(issuePanel);
+        modal.appendChild(buttons);
+        overlay.appendChild(modal);
+        overlay.addEventListener('click', (event) => closeModalByOverlay(overlay, event));
+
+        document.body.appendChild(overlay);
+        closeBtn.focus();
+      }
+
       function updateVmRowState(vmName, vmi, fetchError) {
         const rowState = vmRowStateMap.get(vmName);
         if (!rowState) {
@@ -594,6 +689,10 @@
           btn.disabled = false;
         });
       });
+
+      document.getElementById('btn-question-azurion').addEventListener('click', function () {
+        openQuestionModal();
+      });
     </script>
   </meta>
   <body>
@@ -617,10 +716,13 @@
       <div class="bottom-bar">
         <section class="info-note" aria-label="Console availability note">
           <span class="warn-triangle" aria-hidden="true"><span>!</span></span>
-          <span class="info-note-text">The Virtual Azurion needs some time to boot up (~60s). When connecting, you might not see anything during that time.</span>
+          <span class="info-note-text">The Virtual Azurion needs some time to boot up (30-60s). When connecting, you might not see anything during that time.</span>
         </section>
         <section class="refresh-card" aria-label="Refresh VM list">
           <button id="btn-refresh-vms" class="button-refresh-vms" title="Refresh VM list">&#8635; Refresh</button>
+        </section>
+        <section class="question-card" aria-label="Question about virtual azurion">
+          <button id="btn-question-azurion" class="button-refresh-vms button-question" title="Question about virtual azurion">&#63;</button>
         </section>
       </div>
     </main>

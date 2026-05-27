@@ -140,7 +140,6 @@ th[colspan] {
     color: var(--good-fg);
 }
 
-.status-succeeded,
 .status-pending,
 .status-unknown {
     background: var(--warn-bg);
@@ -554,6 +553,14 @@ th[colspan] {
     justify-content: center;
 }
 
+.question-card {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
 .button-refresh-vms {
     align-items: center;
     appearance: none;
@@ -599,6 +606,56 @@ th[colspan] {
             #8b9dc7 8px,
             #8b9dc7 16px);
     box-shadow: none;
+}
+
+.button-question {
+    min-width: 42px;
+    padding-left: 0;
+    padding-right: 0;
+    background: linear-gradient(180deg, #31b8b2 0%, #1f8f8b 100%);
+    border-color: #1a7673;
+}
+
+.button-question:not(:disabled):hover {
+    box-shadow: 0 6px 16px rgba(31, 143, 139, 0.42);
+    background: linear-gradient(180deg, #40c7c1 0%, #2a9d99 100%);
+}
+
+.button-question:focus-visible {
+    outline-color: #1a7673;
+}
+
+.info-modal {
+    max-width: 520px;
+}
+
+.modal-steps {
+    margin: 0 0 20px 0;
+    padding-left: 18px;
+    color: var(--text-0);
+}
+
+.modal-steps li {
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+
+.modal-issue-link {
+    margin-top: 8px;
+}
+
+.modal-issue-panel {
+    margin: 6px 0 20px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--surface-0);
+}
+
+.modal-issue-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .warn-triangle {
