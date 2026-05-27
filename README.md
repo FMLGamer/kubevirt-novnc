@@ -72,6 +72,53 @@ docker build -t kubevirt-novnc:local .
 
 If you publish to a registry, update the Deployment image in [k8s/kv-novnc.yaml](k8s/kv-novnc.yaml) accordingly.
 
+## Release Process (GitHub)
+
+1. Create and push a semantic version tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+2. In GitHub, open **Releases** -> **Draft a new release**.
+3. Select the tag and use [.github/RELEASE_TEMPLATE.md](.github/RELEASE_TEMPLATE.md) as the release body.
+4. Enable auto-generated release notes (optional but recommended). Categories are configured in [.github/release.yml](.github/release.yml).
+5. Publish and then update manifests/consumers to the newly released image tag.
+
+## Suggested GitHub Release Practices
+
+- Protect `main` with required PR reviews and status checks.
+- Use conventional labels (`breaking`, `feature`, `bug`, `docs`, `security`) so release notes are categorized automatically.
+- Keep release tags immutable (`vX.Y.Z`) and avoid retagging after publish.
+- Attach rollout notes and rollback notes in each release body.
+- Include compatibility notes (Kubernetes and KubeVirt versions tested).
+- Optionally sign container images and generate SBOM/provenance for supply-chain traceability.
+
+## Helm: Pin Version In values.yaml (bitnami/nginx)
+
+When deploying `bitnami/nginx`, pin by immutable image tag or digest in your Helm values:
+
+```yaml
+image:
+  registry: docker.io
+  repository: bitnami/nginx
+  # Prefer a fixed, non-latest tag
+  tag: 1.27.1-debian-12-r3
+  pullPolicy: IfNotPresent
+
+  # Stronger pinning: use digest (if chart version supports digest field)
+  # digest: "sha256:0123456789abcdef..."
+```
+
+Install/upgrade with pinned values:
+
+```bash
+helm upgrade --install web bitnami/nginx -f values.yaml
+```
+
+If your chart supports both `tag` and `digest`, prefer digest because it is immutable.
+
 ## Security Notes
 
 - Basic auth is handled by Traefik middleware in the `traefik` namespace.

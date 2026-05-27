@@ -1,0 +1,7 @@
+# Keep Docker build context minimal for this image
+**
+
+# Required build inputs
+!Dockerfile
+!static/
+!static/**

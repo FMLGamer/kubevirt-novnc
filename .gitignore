@@ -1,0 +1,22 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Logs and local artifacts
+*.log
+*.tmp
+*.bak
+
+# Local env/config files
+.env
+.env.*
+
+# Build/cache artifacts
+node_modules/
+dist/
+build/
+coverage/
